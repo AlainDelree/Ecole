@@ -58,7 +58,7 @@
               {% elif ligne.cloture_passee %}
                 <span class="text-muted small">Trop tard</span>
               {% else %}
-                <form action="{% url 'cantine:reserver_menu' %}" method="post"
+                <form action="{% url 'cantine:panier_ajouter' %}" method="post"
                       class="m-0 d-flex flex-wrap align-items-center gap-2">
                   {% csrf_token %}
                   <input type="hidden" name="enfant_id" value="{{ etat.enfant.id }}">
@@ -73,7 +73,7 @@
                     </option>
                   </select>
                   <button type="submit" class="btn btn-sm btn-outline-primary">
-                    Réserver
+                    Ajouter au panier
                   </button>
                 </form>
               {% endif %}

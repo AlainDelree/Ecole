@@ -73,6 +73,16 @@
           exception à la connexion.
         {% endcomment %}
         {% if user.profil_parent %}
+        <li class="nav-item me-lg-2">
+          <a class="btn btn-sm btn-outline-light position-relative"
+             href="{% url 'cantine:panier_afficher' %}"
+             title="Voir mon panier">
+            Panier
+            {% if panier_nb_articles %}
+              <span class="badge bg-warning text-dark ms-1">{{ panier_nb_articles }}</span>
+            {% endif %}
+          </a>
+        </li>
         <li class="nav-item me-lg-3">
           <span class="badge bg-light text-primary badge-solde"
                 title="Solde disponible">

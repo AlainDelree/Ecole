@@ -257,24 +257,20 @@ class Reservation(models.Model):
         return f"{self.enfant} — {self.menu} ({self.get_statut_display()})"
 
     def marquer_mangee(self):
-        """Passe la réservation à `mangee` et décompte le solde du parent.
+        """Passe la réservation à `mangee`.
 
-        Idempotent : si la réservation est déjà `mangee`, on ne
-        redécrémente pas le solde et on renvoie False (protection
-        contre les doubles clics dans la vue cuisinière). Même patron
-        que `Paiement.valider()` : mise à jour atomique via une
-        expression F pour éviter les race conditions.
+        Depuis l'introduction du panier, le solde du parent est débité
+        au moment de la validation du panier (voir vue
+        `cantine.views.panier_valider`), pas au moment de la
+        consommation. Cette méthode ne fait donc plus que marquer le
+        statut ; elle reste idempotente pour rester tolérante aux
+        doubles clics dans la vue cuisinière.
         """
         if self.statut == self.STATUT_MANGEE:
             return False
 
         self.statut = self.STATUT_MANGEE
         self.save(update_fields=["statut"])
-
-        prix_du_repas = self.menu.prix_pour(self.enfant, self.formule)
-        ProfilParent.objects.filter(pk=self.enfant.parent_id).update(
-            solde_cents=models.F("solde_cents") - prix_du_repas
-        )
         return True
 
 

@@ -25,10 +25,26 @@ urlpatterns = [
         name="deconnexion",
     ),
     path("calendrier/", views.calendrier, name="calendrier"),
+    path("panier/", views.panier_afficher, name="panier_afficher"),
     path(
-        "calendrier/reserver/",
-        views.reserver_menu,
-        name="reserver_menu",
+        "panier/ajouter/",
+        views.panier_ajouter,
+        name="panier_ajouter",
+    ),
+    path(
+        "panier/retirer/",
+        views.panier_retirer,
+        name="panier_retirer",
+    ),
+    path(
+        "panier/vider/",
+        views.panier_vider,
+        name="panier_vider",
+    ),
+    path(
+        "panier/valider/",
+        views.panier_valider,
+        name="panier_valider",
     ),
     path("historique/", views.historique, name="historique"),
     path(

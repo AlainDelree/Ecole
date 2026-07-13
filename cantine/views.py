@@ -10,17 +10,19 @@ from datetime import datetime, timedelta
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db import transaction
+from django.db.models import Count, F, Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from . import panier as panier_session
 from .decorators import comptabilite_required, cuisine_required
 from .forms import DeclarationVirementForm, InscriptionParentForm, MenuForm
 from .generateur_menus import generer_suggestions
-from .models import Classe, Enfant, Menu, Paiement, Reservation
+from .models import Classe, Enfant, Menu, Paiement, ProfilParent, Reservation
 
 
 # Nombre de suggestions générées par pool (mixte / végétarien) et
@@ -163,15 +165,18 @@ def calendrier(request):
 
 @login_required
 @require_POST
-def reserver_menu(request):
-    """Crée une réservation en_attente_paiement pour (enfant, menu, formule)."""
+def panier_ajouter(request):
+    """Ajoute (enfant, menu, formule) au panier de la session parent.
+
+    Vérifie que l'enfant appartient bien au parent, que le menu est
+    encore ouvert et qu'aucune réservation n'existe déjà pour ce couple.
+    Si tout est OK, l'entrée est stockée dans `request.session["panier"]`.
+    """
     profil = request.user.profil_parent
     enfant_id = request.POST.get("enfant_id")
     menu_id = request.POST.get("menu_id")
     formule = request.POST.get("formule", Reservation.FORMULE_COMPLET)
 
-    # Valide la formule contre la liste blanche du modèle. Toute autre
-    # valeur retombe silencieusement sur « repas complet » (défaut).
     formules_valides = {code for code, _ in Reservation.FORMULE_CHOICES}
     if formule not in formules_valides:
         formule = Reservation.FORMULE_COMPLET
@@ -185,29 +190,144 @@ def reserver_menu(request):
         )
         return HttpResponseRedirect(reverse("cantine:calendrier"))
 
-    _, cree = Reservation.objects.get_or_create(
-        enfant=enfant,
-        menu=menu,
-        defaults={
-            "statut": Reservation.STATUT_EN_ATTENTE,
-            "formule": formule,
-        },
-    )
-    if cree:
-        libelle_formule = dict(Reservation.FORMULE_CHOICES)[formule].lower()
+    if Reservation.objects.filter(enfant=enfant, menu=menu).exists():
+        messages.info(
+            request,
+            f"Une réservation existe déjà pour {enfant.prenom} le "
+            f"{menu.date:%d/%m/%Y}.",
+        )
+        return HttpResponseRedirect(reverse("cantine:calendrier"))
+
+    ajoute = panier_session.ajouter(request.session, enfant.id, menu.id, formule)
+    libelle_formule = dict(Reservation.FORMULE_CHOICES)[formule].lower()
+    if ajoute:
         messages.success(
             request,
-            f"Réservation enregistrée pour {enfant.prenom} le "
-            f"{menu.date:%d/%m/%Y} ({libelle_formule}). Elle sera confirmée "
-            "dès validation du paiement.",
+            f"Ajouté au panier : {enfant.prenom} le "
+            f"{menu.date:%d/%m/%Y} ({libelle_formule}).",
         )
     else:
         messages.info(
             request,
-            f"Une réservation existait déjà pour {enfant.prenom} le "
-            f"{menu.date:%d/%m/%Y}.",
+            f"Formule mise à jour dans le panier pour {enfant.prenom} le "
+            f"{menu.date:%d/%m/%Y} ({libelle_formule}).",
         )
     return HttpResponseRedirect(reverse("cantine:calendrier"))
+
+
+@login_required
+def panier_afficher(request):
+    """Affiche le contenu du panier avec total et disponibilité du solde."""
+    profil = request.user.profil_parent
+    lignes, perdues = panier_session.lignes_hydratees(request.session, profil)
+    if perdues:
+        panier_session.purger_invalides(request.session, perdues)
+        messages.warning(
+            request,
+            f"{len(perdues)} article(s) du panier n'étaient plus disponibles "
+            "(menu clôturé ou déjà réservé) et ont été retirés.",
+        )
+    total_cents = sum(ligne["prix_cents"] for ligne in lignes)
+    solde_cents = profil.solde_cents
+    manque_cents = max(0, total_cents - solde_cents)
+    return render(
+        request,
+        "cantine/panier.html",
+        {
+            "lignes": lignes,
+            "total_euros": round(total_cents / 100, 2),
+            "solde_euros": profil.solde_euros,
+            "solde_suffisant": bool(lignes) and solde_cents >= total_cents,
+            "manque_euros": round(manque_cents / 100, 2),
+        },
+    )
+
+
+@login_required
+@require_POST
+def panier_retirer(request):
+    """Retire une entrée du panier via son index."""
+    try:
+        index = int(request.POST.get("index", ""))
+    except (TypeError, ValueError):
+        return HttpResponseRedirect(reverse("cantine:panier_afficher"))
+    if panier_session.supprimer(request.session, index):
+        messages.info(request, "Article retiré du panier.")
+    return HttpResponseRedirect(reverse("cantine:panier_afficher"))
+
+
+@login_required
+@require_POST
+def panier_vider(request):
+    """Vide totalement le panier."""
+    panier_session.vider(request.session)
+    messages.info(request, "Panier vidé.")
+    return HttpResponseRedirect(reverse("cantine:panier_afficher"))
+
+
+@login_required
+@require_POST
+def panier_valider(request):
+    """Valide le panier : débit du solde + création des réservations confirmées.
+
+    Le débit et la création des réservations se font dans une transaction
+    atomique, avec un verrou en écriture sur le ProfilParent pour éviter
+    tout race entre deux validations simultanées ou entre une validation
+    et la validation d'un paiement par la comptabilité.
+
+    Si le solde est insuffisant, le panier n'est pas consommé et le
+    parent est redirigé vers le formulaire de déclaration de virement.
+    """
+    profil = request.user.profil_parent
+    lignes, perdues = panier_session.lignes_hydratees(request.session, profil)
+    if perdues:
+        panier_session.purger_invalides(request.session, perdues)
+        messages.warning(
+            request,
+            f"{len(perdues)} article(s) n'étaient plus disponibles et ont "
+            "été retirés du panier. Vérifiez le contenu avant de valider.",
+        )
+        return redirect("cantine:panier_afficher")
+
+    if not lignes:
+        messages.warning(request, "Votre panier est vide.")
+        return redirect("cantine:panier_afficher")
+
+    total_cents = sum(ligne["prix_cents"] for ligne in lignes)
+
+    with transaction.atomic():
+        profil_verrouille = ProfilParent.objects.select_for_update().get(
+            pk=profil.pk
+        )
+        if profil_verrouille.solde_cents < total_cents:
+            manque = (total_cents - profil_verrouille.solde_cents) / 100
+            messages.error(
+                request,
+                f"Solde insuffisant : il manque {manque:.2f} € pour "
+                f"valider ce panier ({total_cents / 100:.2f} €). "
+                "Déclarez un virement pour créditer votre solde — "
+                "votre panier est conservé.",
+            )
+            return redirect("cantine:declarer_virement")
+
+        for ligne in lignes:
+            Reservation.objects.create(
+                enfant=ligne["enfant"],
+                menu=ligne["menu"],
+                formule=ligne["formule"],
+                statut=Reservation.STATUT_CONFIRMEE,
+            )
+        ProfilParent.objects.filter(pk=profil.pk).update(
+            solde_cents=F("solde_cents") - total_cents,
+        )
+
+    panier_session.vider(request.session)
+    messages.success(
+        request,
+        f"{len(lignes)} réservation(s) confirmée(s), solde débité de "
+        f"{total_cents / 100:.2f} €.",
+    )
+    return redirect("cantine:accueil")
 
 
 @login_required

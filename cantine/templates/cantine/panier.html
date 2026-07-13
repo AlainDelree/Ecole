@@ -1,0 +1,107 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Panier — Cantine{% endblock %}
+
+{% block content %}
+<h1 class="mb-3">Votre panier</h1>
+
+{% if lignes %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Enfant</th>
+              <th>Menu</th>
+              <th>Formule</th>
+              <th class="text-end">Prix</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ligne in lignes %}
+              <tr>
+                <td>{{ ligne.menu.date|date:"l d/m/Y"|capfirst }}</td>
+                <td>
+                  {{ ligne.enfant.prenom }} {{ ligne.enfant.nom }}
+                  <span class="text-muted small">({{ ligne.enfant.classe }})</span>
+                </td>
+                <td>{{ ligne.menu.plat_principal }}</td>
+                <td>
+                  <span class="badge bg-secondary">{{ ligne.formule_display }}</span>
+                </td>
+                <td class="text-end">{{ ligne.prix_euros|floatformat:2 }} €</td>
+                <td class="text-end">
+                  <form action="{% url 'cantine:panier_retirer' %}" method="post" class="m-0">
+                    {% csrf_token %}
+                    <input type="hidden" name="index" value="{{ ligne.index }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                      Retirer
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan="4" class="text-end">Total à payer</th>
+              <th class="text-end">{{ total_euros|floatformat:2 }} €</th>
+              <th></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 align-items-center mb-3">
+    <div class="col-md-6">
+      <p class="mb-1">
+        Votre solde disponible :
+        <strong>{{ solde_euros|floatformat:2 }} €</strong>
+      </p>
+      {% if not solde_suffisant %}
+        <div class="alert alert-warning mb-0">
+          Solde insuffisant : il manque
+          <strong>{{ manque_euros|floatformat:2 }} €</strong>
+          pour valider ce panier.
+          <a href="{% url 'cantine:declarer_virement' %}" class="alert-link">
+            Déclarez un virement
+          </a>
+          pour créditer votre solde — le contenu du panier est conservé.
+        </div>
+      {% endif %}
+    </div>
+    <div class="col-md-6 text-md-end d-flex flex-wrap gap-2 justify-content-md-end">
+      <form action="{% url 'cantine:panier_vider' %}" method="post" class="m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-secondary">
+          Vider le panier
+        </button>
+      </form>
+      <form action="{% url 'cantine:panier_valider' %}" method="post" class="m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary" {% if not solde_suffisant %}disabled{% endif %}>
+          Valider et payer par solde ({{ total_euros|floatformat:2 }} €)
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <p class="text-muted small">
+    Valider le panier confirme toutes les réservations d'un coup et
+    déduit le montant total de votre solde. Les repas sont alors visibles
+    par la cuisinière comme des réservations « confirmées ».
+  </p>
+{% else %}
+  <div class="alert alert-info">
+    Votre panier est vide.
+    <a href="{% url 'cantine:calendrier' %}" class="alert-link">
+      Ajoutez des repas depuis le calendrier
+    </a>.
+  </div>
+{% endif %}
+{% endblock %}
