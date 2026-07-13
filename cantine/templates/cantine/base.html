@@ -58,10 +58,12 @@
         {% endfor %}
       </ul>
       <ul class="navbar-nav ms-auto align-items-lg-center">
-        {# Le solde ne s'affiche que pour les vrais parents : un
-           utilisateur staff (groupe Cuisine, etc.) n'a pas de
-           ProfilParent et faire .solde_euros dessus lèverait une
-           exception à la connexion. #}
+        {% comment %}
+          Le solde ne s'affiche que pour les vrais parents : un
+          utilisateur staff (groupe Cuisine, etc.) n'a pas de
+          ProfilParent et faire .solde_euros dessus lèverait une
+          exception à la connexion.
+        {% endcomment %}
         {% if user.profil_parent %}
         <li class="nav-item me-lg-3">
           <span class="badge bg-light text-primary badge-solde"
