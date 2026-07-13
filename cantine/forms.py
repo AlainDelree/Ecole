@@ -135,6 +135,20 @@ class MenuForm(forms.ModelForm):
             ),
         }
 
+    def clean_date(self):
+        """Refuse une date tombant un mercredi.
+
+        Il n'y a jamais de repas scolaire le mercredi (pas cours
+        l'après-midi). On bloque au niveau du formulaire — pas du
+        modèle — pour laisser une création exceptionnelle possible via
+        l'admin ou un script si un jour nécessaire. `date.weekday()`
+        est indexé lundi=0, donc mercredi = 2.
+        """
+        date = self.cleaned_data["date"]
+        if date.weekday() == 2:
+            raise forms.ValidationError("Il n'y a pas de repas le mercredi.")
+        return date
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Pré-remplit les 4 champs euros à partir des attributs en centimes
