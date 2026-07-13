@@ -5,13 +5,13 @@ par @cuisine_required (appartenance au groupe Django « Cuisine »).
 La racine `/` redirige selon l'état d'authentification.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
-from django.http import HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -234,6 +234,14 @@ def declarer_virement(request):
 # ---------------------------------------------------------------------
 
 
+def _parse_date_iso(chaine):
+    """Parse une date ISO AAAA-MM-JJ, lève Http404 sinon."""
+    try:
+        return datetime.strptime(chaine, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise Http404("Date invalide (format attendu : AAAA-MM-JJ).")
+
+
 @cuisine_required
 def cuisine_calendrier(request):
     """Liste des 30 prochains jours pour anticiper les commandes.
@@ -276,4 +284,111 @@ def cuisine_calendrier(request):
             "jours": jours_ordonnes,
             "aujourd_hui": aujourd_hui,
         },
+    )
+
+
+@cuisine_required
+def cuisine_jour(request, date):
+    """Détail d'un jour : réservations, allergies, actions « A mangé »."""
+    jour = _parse_date_iso(date)
+
+    menus = list(
+        Menu.objects.filter(date=jour).order_by("plat_principal")
+    )
+    if not menus:
+        return render(
+            request,
+            "cantine/cuisine_jour.html",
+            {"jour": jour, "aucun_menu": True, "menus_detail": []},
+        )
+
+    # Une entrée par menu : réservations à préparer regroupées par
+    # texte d'allergies (les enfants sans allergie sont dans le
+    # groupe "" — affiché "Aucune allergie" dans le template).
+    menus_detail = []
+    total_prevus = 0
+    total_manges = 0
+    for menu in menus:
+        reservations = list(
+            Reservation.objects.filter(
+                menu=menu,
+                statut__in=STATUTS_A_PREPARER,
+            )
+            .select_related("enfant", "enfant__classe")
+            .order_by("enfant__nom", "enfant__prenom")
+        )
+        groupes = {}
+        for resa in reservations:
+            cle = (resa.enfant.allergies or "").strip()
+            groupes.setdefault(cle, []).append(resa)
+        # Trie : "sans allergie" d'abord, puis par texte d'allergie.
+        groupes_ordonnes = sorted(
+            groupes.items(), key=lambda kv: (kv[0] != "", kv[0].lower())
+        )
+        nb_manges = sum(
+            1 for r in reservations if r.statut == Reservation.STATUT_MANGEE
+        )
+        menus_detail.append({
+            "menu": menu,
+            "groupes": groupes_ordonnes,
+            "nb_reservations": len(reservations),
+            "nb_manges": nb_manges,
+        })
+        total_prevus += len(reservations)
+        total_manges += nb_manges
+
+    return render(
+        request,
+        "cantine/cuisine_jour.html",
+        {
+            "jour": jour,
+            "aucun_menu": False,
+            "menus_detail": menus_detail,
+            "total_prevus": total_prevus,
+            "total_manges": total_manges,
+        },
+    )
+
+
+@cuisine_required
+def cuisine_aujourdhui(request):
+    """Redirige vers /cuisine/jour/<date_du_jour>/."""
+    aujourd_hui = timezone.now().date()
+    return redirect(
+        "cantine:cuisine_jour", date=aujourd_hui.isoformat()
+    )
+
+
+@cuisine_required
+@require_POST
+def cuisine_marquer_mangee(request, reservation_id):
+    """Marque une réservation comme mangée puis revient au jour."""
+    resa = get_object_or_404(
+        Reservation.objects.select_related("enfant", "menu"),
+        pk=reservation_id,
+    )
+    if resa.statut in (
+        Reservation.STATUT_EN_ATTENTE,
+        Reservation.STATUT_ANNULEE,
+    ):
+        messages.error(
+            request,
+            f"Impossible de marquer {resa.enfant.prenom} comme ayant "
+            f"mangé : réservation au statut « {resa.get_statut_display()} ».",
+        )
+    else:
+        change = resa.marquer_mangee()
+        if change:
+            messages.success(
+                request,
+                f"{resa.enfant.prenom} {resa.enfant.nom} : repas décompté.",
+            )
+        else:
+            messages.info(
+                request,
+                f"{resa.enfant.prenom} {resa.enfant.nom} avait déjà "
+                "été marqué : aucun décompte supplémentaire.",
+            )
+    return redirect(
+        "cantine:cuisine_jour", date=resa.menu.date.isoformat()
     )

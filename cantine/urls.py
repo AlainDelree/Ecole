@@ -42,4 +42,19 @@ urlpatterns = [
         views.cuisine_calendrier,
         name="cuisine_calendrier",
     ),
+    path(
+        "cuisine/aujourdhui/",
+        views.cuisine_aujourdhui,
+        name="cuisine_aujourdhui",
+    ),
+    path(
+        "cuisine/jour/<str:date>/",
+        views.cuisine_jour,
+        name="cuisine_jour",
+    ),
+    path(
+        "cuisine/reservation/<int:reservation_id>/mangee/",
+        views.cuisine_marquer_mangee,
+        name="cuisine_marquer_mangee",
+    ),
 ]

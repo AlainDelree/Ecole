@@ -1,0 +1,114 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Cuisine — {{ jour|date:"d/m/Y" }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">
+    Service du {{ jour|date:"l d/m/Y"|capfirst }}
+  </h1>
+  <a class="btn btn-outline-secondary"
+     href="{% url 'cantine:cuisine_calendrier' %}">
+    ← Calendrier
+  </a>
+</div>
+
+{% if aucun_menu %}
+  <div class="alert alert-secondary">
+    Aucun menu prévu ce jour-là.
+  </div>
+{% else %}
+
+  {% for detail in menus_detail %}
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <h5 class="mb-0">{{ detail.menu.plat_principal }}</h5>
+          {% if detail.menu.description %}
+            <small class="text-muted">{{ detail.menu.description }}</small>
+          {% endif %}
+        </div>
+        <span class="badge bg-info text-dark fs-6">
+          {{ detail.nb_manges }} / {{ detail.nb_reservations }} servis
+        </span>
+      </div>
+
+      <div class="card-body">
+        {% if detail.nb_reservations == 0 %}
+          <p class="text-muted mb-0">Aucune réservation confirmée pour ce menu.</p>
+        {% else %}
+          {% for allergie, reservations in detail.groupes %}
+            <div class="mb-3">
+              <h6 class="mb-2">
+                {% if allergie %}
+                  <span class="badge bg-warning text-dark">
+                    ⚠ Allergie / régime : {{ allergie }}
+                  </span>
+                {% else %}
+                  <span class="badge bg-light text-muted border">
+                    Aucune allergie signalée
+                  </span>
+                {% endif %}
+                <span class="text-muted small ms-2">
+                  ({{ reservations|length }} enfant{{ reservations|length|pluralize }})
+                </span>
+              </h6>
+
+              <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Enfant</th>
+                      <th>Classe</th>
+                      <th>Statut</th>
+                      <th class="text-end">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                  {% for resa in reservations %}
+                    <tr>
+                      <td>{{ resa.enfant.prenom }} {{ resa.enfant.nom }}</td>
+                      <td>{{ resa.enfant.classe }}</td>
+                      <td>
+                        {% if resa.statut == 'mangee' %}
+                          <span class="badge bg-success">A mangé</span>
+                        {% elif resa.statut == 'presence_matin_ok' %}
+                          <span class="badge bg-primary">Présent</span>
+                        {% else %}
+                          <span class="badge bg-secondary">
+                            {{ resa.get_statut_display }}
+                          </span>
+                        {% endif %}
+                      </td>
+                      <td class="text-end">
+                        {% if resa.statut != 'mangee' %}
+                          <form method="post"
+                                action="{% url 'cantine:cuisine_marquer_mangee' reservation_id=resa.id %}"
+                                class="m-0 d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-success">
+                              A mangé
+                            </button>
+                          </form>
+                        {% else %}
+                          <span class="text-muted small">—</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+
+  <div class="alert alert-info d-flex justify-content-between align-items-center">
+    <span>Total du jour</span>
+    <strong>{{ total_manges }} servis / {{ total_prevus }} prévus</strong>
+  </div>
+{% endif %}
+{% endblock %}
