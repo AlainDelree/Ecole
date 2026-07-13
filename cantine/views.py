@@ -391,6 +391,162 @@ def declarer_virement(request):
 
 
 # ---------------------------------------------------------------------
+# Paiement (simulateur préparant l'intégration Mollie)
+# ---------------------------------------------------------------------
+
+
+@login_required
+def paiement_simulateur(request):
+    """Affiche le total du panier et un bouton « Payer maintenant ».
+
+    Le total est toujours recalculé côté serveur à partir du panier en
+    session — jamais fait confiance à une valeur cliente.
+    Cette vue remplace pour l'instant la page de paiement Mollie ;
+    l'appel réel à l'API Mollie sera branché dans `paiement_confirmer`.
+    """
+    profil = request.user.profil_parent
+    lignes, perdues = panier_session.lignes_hydratees(request.session, profil)
+    if perdues:
+        panier_session.purger_invalides(request.session, perdues)
+        messages.warning(
+            request,
+            f"{len(perdues)} article(s) du panier n'étaient plus disponibles "
+            "et ont été retirés. Vérifiez le contenu avant de payer.",
+        )
+        return redirect("cantine:panier_afficher")
+
+    if not lignes:
+        messages.warning(request, "Votre panier est vide.")
+        return redirect("cantine:panier_afficher")
+
+    total_cents = sum(ligne["prix_cents"] for ligne in lignes)
+    return render(
+        request,
+        "cantine/paiement_simulateur.html",
+        {
+            "lignes": lignes,
+            "total_euros": round(total_cents / 100, 2),
+        },
+    )
+
+
+@login_required
+@require_POST
+def paiement_confirmer(request):
+    """Confirme le « paiement » simulé et crée les réservations.
+
+    Le montant est recalculé serveur ; les réservations sont créées en
+    statut `confirmee` directement, sans toucher au solde (le solde
+    n'entre plus dans ce flux — le paiement est traité comme réussi
+    par la simulation).
+
+    Les doublons éventuels (une réservation créée pour ce couple entre
+    l'affichage du panier et la confirmation) sont ignorés silencieusement
+    et signalés dans le message final. Le panier est ensuite vidé.
+    """
+    profil = request.user.profil_parent
+    lignes, perdues = panier_session.lignes_hydratees(request.session, profil)
+    if perdues:
+        panier_session.purger_invalides(request.session, perdues)
+        messages.warning(
+            request,
+            f"{len(perdues)} article(s) du panier n'étaient plus disponibles "
+            "et ont été retirés. Vérifiez le contenu avant de payer.",
+        )
+        return redirect("cantine:panier_afficher")
+
+    if not lignes:
+        messages.warning(request, "Votre panier est vide.")
+        return redirect("cantine:panier_afficher")
+
+    total_cents = sum(ligne["prix_cents"] for ligne in lignes)
+
+    # TODO Mollie : remplacer cette simulation par l'appel réel à
+    # l'API Mollie (création d'un paiement, redirection utilisateur
+    # vers l'URL de paiement, puis webhook de confirmation). Tant
+    # qu'on est en simulation, on considère que le paiement réussit
+    # toujours à ce point et on crée les réservations directement.
+
+    reservations_creees = []
+    doublons = []
+    with transaction.atomic():
+        for ligne in lignes:
+            enfant = ligne["enfant"]
+            menu = ligne["menu"]
+            if Reservation.objects.filter(enfant=enfant, menu=menu).exists():
+                doublons.append((enfant, menu))
+                continue
+            reservation = Reservation.objects.create(
+                enfant=enfant,
+                menu=menu,
+                formule=ligne["formule"],
+                statut=Reservation.STATUT_CONFIRMEE,
+            )
+            reservations_creees.append(reservation)
+
+    panier_session.vider(request.session)
+
+    # Résumé stocké en session pour la page de succès : on capture les
+    # informations d'affichage tant que les objets sont encore chargés,
+    # plutôt que de re-requêter par ID depuis /paiement/succes/.
+    request.session["paiement_recap"] = {
+        "total_euros": round(total_cents / 100, 2),
+        "reservations": [
+            {
+                "prenom": r.enfant.prenom,
+                "nom": r.enfant.nom,
+                "classe": str(r.enfant.classe),
+                "date": r.menu.date.isoformat(),
+                "plat_principal": r.menu.plat_principal,
+                "formule_display": r.get_formule_display(),
+            }
+            for r in reservations_creees
+        ],
+        "doublons": [
+            {
+                "prenom": enfant.prenom,
+                "nom": enfant.nom,
+                "date": menu.date.isoformat(),
+            }
+            for enfant, menu in doublons
+        ],
+    }
+    request.session.modified = True
+
+    if doublons:
+        messages.warning(
+            request,
+            f"{len(reservations_creees)} réservation(s) confirmée(s). "
+            f"{len(doublons)} déjà présente(s) et ignorée(s).",
+        )
+    else:
+        messages.success(
+            request,
+            f"Paiement accepté : {len(reservations_creees)} réservation(s) "
+            f"confirmée(s).",
+        )
+    return redirect("cantine:paiement_succes")
+
+
+@login_required
+def paiement_succes(request):
+    """Page de confirmation récapitulant les réservations payées."""
+    recap = request.session.pop("paiement_recap", None)
+    request.session.modified = True
+    if not recap:
+        messages.info(
+            request,
+            "Aucun paiement récent à confirmer. Composez d'abord un panier.",
+        )
+        return redirect("cantine:calendrier")
+    return render(
+        request,
+        "cantine/paiement_succes.html",
+        {"recap": recap},
+    )
+
+
+# ---------------------------------------------------------------------
 # Espace cuisinière
 # ---------------------------------------------------------------------
 

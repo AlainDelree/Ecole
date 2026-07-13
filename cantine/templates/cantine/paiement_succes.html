@@ -1,0 +1,61 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Paiement confirmé — Cantine{% endblock %}
+
+{% block content %}
+<h1 class="mb-3">Paiement confirmé</h1>
+
+<div class="alert alert-success">
+  Merci, votre paiement de
+  <strong>{{ recap.total_euros|floatformat:2 }} €</strong>
+  a été accepté (paiement simulé — Mollie pas encore branché).
+</div>
+
+{% if recap.reservations %}
+  <h2 class="h4 mt-4">Réservations confirmées</h2>
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Enfant</th>
+          <th>Menu</th>
+          <th>Formule</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recap.reservations %}
+          <tr>
+            <td>{{ r.date }}</td>
+            <td>{{ r.prenom }} {{ r.nom }} <span class="text-muted small">({{ r.classe }})</span></td>
+            <td>{{ r.plat_principal }}</td>
+            <td><span class="badge bg-secondary">{{ r.formule_display }}</span></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% if recap.doublons %}
+  <h2 class="h5 mt-4">Réservations déjà présentes (ignorées)</h2>
+  <p class="text-muted small">
+    Ces couples enfant/menu étaient déjà réservés — ils n'ont pas été
+    recréés, et leur ancien statut est conservé.
+  </p>
+  <ul class="mb-3">
+    {% for d in recap.doublons %}
+      <li>{{ d.prenom }} {{ d.nom }} — {{ d.date }}</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<div class="d-flex flex-wrap gap-2 mt-4">
+  <a href="{% url 'cantine:accueil' %}" class="btn btn-primary">
+    Retour à l'accueil
+  </a>
+  <a href="{% url 'cantine:calendrier' %}" class="btn btn-outline-secondary">
+    Voir le calendrier des menus
+  </a>
+</div>
+{% endblock %}

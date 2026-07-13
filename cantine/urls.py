@@ -47,6 +47,22 @@ urlpatterns = [
         name="panier_valider",
     ),
     path("historique/", views.historique, name="historique"),
+    # --- Paiement (simulateur Mollie) --------------------------------
+    path(
+        "paiement/simulateur/",
+        views.paiement_simulateur,
+        name="paiement_simulateur",
+    ),
+    path(
+        "paiement/confirmer/",
+        views.paiement_confirmer,
+        name="paiement_confirmer",
+    ),
+    path(
+        "paiement/succes/",
+        views.paiement_succes,
+        name="paiement_succes",
+    ),
     path(
         "declarer-virement/",
         views.declarer_virement,
