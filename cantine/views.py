@@ -120,13 +120,29 @@ def calendrier(request):
     maintenant = timezone.now()
 
     # Assemble une structure prête à parcourir dans le template :
-    # pour chaque menu, la liste (enfant, reservation_ou_none).
+    # pour chaque menu, la liste (enfant, reservation_ou_none) avec
+    # les prix pré-calculés pour chaque formule (complet/potage) selon
+    # le niveau de la classe de l'enfant. On expose des valeurs en
+    # euros arrondies à 2 décimales pour un rendu direct.
     lignes = []
     for menu in menus:
         etats_enfants = []
         for enfant in enfants:
             resa = index_resa.get((enfant.id, menu.id))
-            etats_enfants.append({"enfant": enfant, "reservation": resa})
+            prix_complet_cents = menu.prix_pour(
+                enfant, Reservation.FORMULE_COMPLET
+            )
+            prix_potage_cents = menu.prix_pour(
+                enfant, Reservation.FORMULE_POTAGE
+            )
+            etats_enfants.append(
+                {
+                    "enfant": enfant,
+                    "reservation": resa,
+                    "prix_complet_euros": round(prix_complet_cents / 100, 2),
+                    "prix_potage_euros": round(prix_potage_cents / 100, 2),
+                }
+            )
         lignes.append(
             {
                 "menu": menu,
@@ -148,10 +164,17 @@ def calendrier(request):
 @login_required
 @require_POST
 def reserver_menu(request):
-    """Crée une réservation en_attente_paiement pour (enfant, menu)."""
+    """Crée une réservation en_attente_paiement pour (enfant, menu, formule)."""
     profil = request.user.profil_parent
     enfant_id = request.POST.get("enfant_id")
     menu_id = request.POST.get("menu_id")
+    formule = request.POST.get("formule", Reservation.FORMULE_COMPLET)
+
+    # Valide la formule contre la liste blanche du modèle. Toute autre
+    # valeur retombe silencieusement sur « repas complet » (défaut).
+    formules_valides = {code for code, _ in Reservation.FORMULE_CHOICES}
+    if formule not in formules_valides:
+        formule = Reservation.FORMULE_COMPLET
 
     enfant = get_object_or_404(Enfant, pk=enfant_id, parent=profil)
     menu = get_object_or_404(Menu, pk=menu_id)
@@ -165,14 +188,18 @@ def reserver_menu(request):
     _, cree = Reservation.objects.get_or_create(
         enfant=enfant,
         menu=menu,
-        defaults={"statut": Reservation.STATUT_EN_ATTENTE},
+        defaults={
+            "statut": Reservation.STATUT_EN_ATTENTE,
+            "formule": formule,
+        },
     )
     if cree:
+        libelle_formule = dict(Reservation.FORMULE_CHOICES)[formule].lower()
         messages.success(
             request,
             f"Réservation enregistrée pour {enfant.prenom} le "
-            f"{menu.date:%d/%m/%Y}. Elle sera confirmée dès validation "
-            "du paiement.",
+            f"{menu.date:%d/%m/%Y} ({libelle_formule}). Elle sera confirmée "
+            "dès validation du paiement.",
         )
     else:
         messages.info(
@@ -346,15 +373,19 @@ def cuisine_jour(request, date):
             # On expose des champs scalaires plutôt que l'objet Enfant
             # (qui embarque parent.solde_cents via le select_related), afin
             # qu'aucune valeur de solde ne transite dans le contexte.
+            # Le prix comparé au solde dépend maintenant du niveau de
+            # l'enfant et de la formule choisie à la réservation.
+            prix_du_repas = menu.prix_pour(resa.enfant, resa.formule)
             resa_affichage = {
                 "id": resa.id,
                 "statut": resa.statut,
                 "statut_display": resa.get_statut_display(),
+                "formule_display": resa.get_formule_display(),
                 "prenom": resa.enfant.prenom,
                 "nom": resa.enfant.nom,
                 "classe": str(resa.enfant.classe),
                 "solde_suffisant": (
-                    resa.enfant.parent.solde_cents >= menu.prix_cents
+                    resa.enfant.parent.solde_cents >= prix_du_repas
                 ),
             }
             groupes.setdefault(cle, []).append(resa_affichage)
