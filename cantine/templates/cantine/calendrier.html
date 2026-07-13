@@ -57,6 +57,16 @@
                 </span>
               {% elif ligne.cloture_passee %}
                 <span class="text-muted small">Trop tard</span>
+              {% elif etat.dans_panier %}
+                <span class="d-flex align-items-center gap-2">
+                  <span class="badge bg-success">
+                    &#10003; Déjà dans le panier
+                  </span>
+                  <a href="{% url 'cantine:panier_afficher' %}"
+                     class="btn btn-sm btn-outline-secondary">
+                    Voir le panier
+                  </a>
+                </span>
               {% else %}
                 <form action="{% url 'cantine:panier_ajouter' %}" method="post"
                       class="m-0 d-flex flex-wrap align-items-center gap-2">

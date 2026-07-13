@@ -32,6 +32,19 @@ def compter(session):
     return len(_liste_brute(session))
 
 
+def couples_presents(session):
+    """Retourne l'ensemble des couples ``(enfant_id, menu_id)`` du panier.
+
+    Permet à la vue calendrier de savoir, pour chaque enfant et chaque
+    menu affiché, si l'entrée est déjà dans le panier de session — et
+    donc d'afficher un état « Déjà dans le panier » plutôt qu'un
+    bouton d'ajout identique.
+    """
+    return {
+        (e["enfant_id"], e["menu_id"]) for e in _liste_brute(session)
+    }
+
+
 def ajouter(session, enfant_id, menu_id, formule):
     """Ajoute une entrée au panier ; met à jour la formule si déjà présente.
 

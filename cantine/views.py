@@ -121,6 +121,11 @@ def calendrier(request):
 
     maintenant = timezone.now()
 
+    # Couples (enfant, menu) déjà présents dans le panier de session :
+    # sert à afficher un état « Déjà dans le panier » au lieu d'un
+    # bouton d'ajout identique pour ces entrées.
+    couples_panier = panier_session.couples_presents(request.session)
+
     # Assemble une structure prête à parcourir dans le template :
     # pour chaque menu, la liste (enfant, reservation_ou_none) avec
     # les prix pré-calculés pour chaque formule (complet/potage) selon
@@ -141,6 +146,7 @@ def calendrier(request):
                 {
                     "enfant": enfant,
                     "reservation": resa,
+                    "dans_panier": (enfant.id, menu.id) in couples_panier,
                     "prix_complet_euros": round(prix_complet_cents / 100, 2),
                     "prix_potage_euros": round(prix_potage_cents / 100, 2),
                 }
