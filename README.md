@@ -7,21 +7,40 @@ l'admin Django pour l'instant.
 
 ## Flux global
 
-1. **Parents** — réservent des repas (jusqu'à 30 jours à l'avance) et
-   déclarent leurs paiements par virement.
-2. **Comptabilité** — valide les paiements reçus via l'admin Django,
-   ce qui crédite automatiquement le solde du parent.
-3. **Cuisine** — consulte les réservations confirmées.
-4. **Enseignants** — confirment la présence de l'enfant le matin.
-5. **Cuisinière** — valide le service post-repas, ce qui décompte le
-   solde du parent (interface dédiée à venir).
+1. **Parents** — composent un **panier** de réservations (jusqu'à 30
+   jours à l'avance), puis règlent le panier en une opération via un
+   **simulateur de paiement** (voir plus bas). Les réservations
+   passent immédiatement en statut « confirmée ».
+2. **Cuisine** — consulte les réservations confirmées et prépare les
+   commandes.
+3. **Enseignants** — confirmeront la présence de l'enfant le matin
+   (interface dédiée à venir).
+4. **Cuisinière** — valide le service post-repas (statut final
+   « mangée »).
+5. **Comptabilité** — suit les réservations et l'historique via
+   l'admin Django et la vue de suivi enfants.
+
+### Paiement : simulateur en attendant Mollie
+
+L'intégration Mollie (SEPA, Bancontact, carte bancaire) n'est **pas
+encore branchée**. Le portail utilise pour l'instant un simulateur de
+paiement qui affiche le total à payer et confirme les réservations en
+un clic, sans encaissement réel. Un commentaire `# TODO Mollie` dans
+`cantine/views.py` marque le point où l'appel à l'API Mollie prendra
+place. Le rapprochement bancaire (paiements Mollie ↔ compte réel de
+l'école) sera à traiter lors de cette intégration future.
+
+L'ancien flux « virement déclaré + validation compta + solde crédité »
+a été retiré de l'interface, mais le modèle `Paiement` et le champ
+`solde_cents` sont conservés en base — aucune donnée existante n'a
+été supprimée.
 
 ## Pile technique
 
 - Python 3.12+ / Django 5
 - SQLite (premier jet — bascule PostgreSQL plus tard)
 - Bootstrap 5 via CDN + django-crispy-forms
-- Pas de passerelle de paiement pour l'instant
+- Paiement : simulateur intégré, intégration Mollie prévue
 
 ## Installation locale
 
@@ -60,26 +79,27 @@ chaque parcours sans créer de compte à la main.
 | cuisine                         | cuisine1234  | Groupe Cuisine       |
 | compta                          | compta1234   | Groupe Comptabilite  |
 
-**Superutilisateur (compta)** — *non* créé par `peupler_demo` : il se
+**Superutilisateur (admin)** — *non* créé par `peupler_demo` : il se
 crée manuellement à l'installation avec `python manage.py createsuperuser`.
-Il sert de compte comptabilité pour valider les virements dans l'admin
-Django (<http://localhost:8000/admin/>).
+Il donne accès à l'admin Django (<http://localhost:8000/admin/>) pour
+consulter les données (dont l'historique des paiements virement
+legacy conservé en base).
 
-**Parent** — pour tester le parcours parent (réservation, déclaration de
-virement, historique), connectez-vous avec `parent.dupont@example.be`
-(mot de passe `demo1234`) sur le site public (<http://localhost:8000/>).
-Ce parent a déjà des enfants rattachés dans les données de démo.
+**Parent** — pour tester le parcours parent (composition du panier,
+paiement simulé, historique), connectez-vous avec
+`parent.dupont@example.be` (mot de passe `demo1234`) sur le site
+public (<http://localhost:8000/>). Ce parent a déjà des enfants
+rattachés dans les données de démo.
 
 **Cuisine** — le compte `cuisine` (mot de passe `cuisine1234`) est membre
 du groupe Django `Cuisine` et accède aux vues cuisinière
 (`/cuisine/calendrier/`, `/cuisine/aujourdhui/`) et à la gestion des menus.
 
 **Comptabilité** — le compte `compta` (mot de passe `compta1234`) est
-membre du groupe Django `Comptabilite` (sans statut staff) et accède à
-l'interface dédiée : validation/rejet des paiements
-(`/comptabilite/paiements/`) et suivi croisé repas/paiements par enfant
-(`/comptabilite/suivi-enfants/`). Il ne peut ni créer ni modifier les
-enfants, classes ou menus — uniquement consulter.
+membre du groupe Django `Comptabilite` (sans statut staff) et accède
+au suivi croisé repas par enfant (`/comptabilite/suivi-enfants/`).
+Il ne peut ni créer ni modifier les enfants, classes ou menus —
+uniquement consulter.
 
 ## Structure principale
 
@@ -119,6 +139,9 @@ plus la source des suggestions.
 ## Prochaines étapes (issues à venir)
 
 - Interfaces dédiées cuisine / enseignants / cuisinière
-- Intégration Mollie (paiement par carte plutôt que virement)
+- Intégration Mollie réelle en remplacement du simulateur
+  (`# TODO Mollie` dans `cantine/views.py`) — implique un
+  rapprochement bancaire entre les paiements Mollie et le compte
+  bancaire de l'école
 - Bascule PostgreSQL + configuration de prod
-- Notifications e-mail (paiement validé, présence à confirmer)
+- Notifications e-mail (paiement encaissé, présence à confirmer)
