@@ -47,14 +47,18 @@
         </li>
       </ul>
       <ul class="navbar-nav ms-auto align-items-lg-center">
-        {% with profil=user.profil_parent %}
+        {# Le solde ne s'affiche que pour les vrais parents : un
+           utilisateur staff (groupe Cuisine, etc.) n'a pas de
+           ProfilParent et faire .solde_euros dessus lèverait une
+           exception à la connexion. #}
+        {% if user.profil_parent %}
         <li class="nav-item me-lg-3">
           <span class="badge bg-light text-primary badge-solde"
                 title="Solde disponible">
-            Solde : {{ profil.solde_euros|floatformat:2 }} €
+            Solde : {{ user.profil_parent.solde_euros|floatformat:2 }} €
           </span>
         </li>
-        {% endwith %}
+        {% endif %}
         <li class="nav-item">
           <form action="{% url 'cantine:deconnexion' %}" method="post" class="d-inline">
             {% csrf_token %}
