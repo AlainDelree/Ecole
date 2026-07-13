@@ -267,15 +267,26 @@ def cuisine_calendrier(request):
     # jour (rare, mais le modèle Menu a `unique=True` sur date donc en
     # pratique c'est un menu par jour ; on regroupe quand même pour
     # rester tolérant à un futur assouplissement).
-    jours = {}
+    menus_par_date = {}
     for menu in menus:
-        entree = jours.setdefault(
+        entree = menus_par_date.setdefault(
             menu.date,
             {"date": menu.date, "menus": [], "total": 0},
         )
         entree["menus"].append(menu)
         entree["total"] += menu.nb_repas
-    jours_ordonnes = sorted(jours.values(), key=lambda j: j["date"])
+
+    # On rend chaque jour de la période (même sans menu) afin que la
+    # cuisinière puisse créer directement le menu manquant du jour.
+    jours_ordonnes = []
+    for offset in range(31):
+        jour = aujourd_hui + timedelta(days=offset)
+        jours_ordonnes.append(
+            menus_par_date.get(
+                jour,
+                {"date": jour, "menus": [], "total": 0},
+            )
+        )
 
     return render(
         request,

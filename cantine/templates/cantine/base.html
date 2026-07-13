@@ -45,6 +45,17 @@
         <li class="nav-item">
           <a class="nav-link" href="{% url 'cantine:declarer_virement' %}">Déclarer un virement</a>
         </li>
+        {# Liens supplémentaires réservés au groupe « Cuisine ». #}
+        {% for g in user.groups.all %}
+          {% if g.name == "Cuisine" %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'cantine:cuisine_calendrier' %}">Cuisine — calendrier</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'cantine:cuisine_menus' %}">Gérer les menus</a>
+            </li>
+          {% endif %}
+        {% endfor %}
       </ul>
       <ul class="navbar-nav ms-auto align-items-lg-center">
         {# Le solde ne s'affiche que pour les vrais parents : un

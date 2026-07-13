@@ -5,10 +5,16 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="mb-0">Cuisine — 30 prochains jours</h1>
-  <a href="{% url 'cantine:cuisine_aujourdhui' %}"
-     class="btn btn-outline-primary">
-    Voir le jour même
-  </a>
+  <div>
+    <a href="{% url 'cantine:cuisine_menus' %}"
+       class="btn btn-outline-secondary">
+      Gérer les menus
+    </a>
+    <a href="{% url 'cantine:cuisine_aujourdhui' %}"
+       class="btn btn-outline-primary">
+      Voir le jour même
+    </a>
+  </div>
 </div>
 
 <p class="text-muted">
@@ -44,18 +50,31 @@
                   <span class="text-muted small">— {{ menu.description }}</span>
                 {% endif %}
               </div>
+            {% empty %}
+              <span class="text-muted fst-italic">Aucun menu défini</span>
             {% endfor %}
           </td>
           <td class="text-end">
-            <span class="badge bg-info text-dark fs-6">
-              {{ jour.total }}
-            </span>
+            {% if jour.menus %}
+              <span class="badge bg-info text-dark fs-6">
+                {{ jour.total }}
+              </span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
           </td>
           <td class="text-end">
-            <a class="btn btn-sm btn-primary"
-               href="{% url 'cantine:cuisine_jour' date=jour.date|date:'Y-m-d' %}">
-              Détail
-            </a>
+            {% if jour.menus %}
+              <a class="btn btn-sm btn-primary"
+                 href="{% url 'cantine:cuisine_jour' date=jour.date|date:'Y-m-d' %}">
+                Détail
+              </a>
+            {% else %}
+              <a class="btn btn-sm btn-outline-primary"
+                 href="{% url 'cantine:cuisine_menu_creer' %}?date={{ jour.date|date:'Y-m-d' }}">
+                Créer le menu de ce jour
+              </a>
+            {% endif %}
           </td>
         </tr>
       {% endfor %}
