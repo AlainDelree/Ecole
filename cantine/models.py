@@ -121,15 +121,6 @@ class Menu(models.Model):
     date = models.DateField("date du repas", unique=True)
     plat_principal = models.CharField("plat principal", max_length=200)
     description = models.TextField("description / accompagnements", blank=True)
-    prix_cents = models.IntegerField(
-        "prix (centimes) — obsolète",
-        null=True,
-        blank=True,
-        help_text=(
-            "Champ conservé temporairement pour la migration ; supprimé par "
-            "une migration ultérieure. Utiliser les champs prix_*_cents."
-        ),
-    )
     prix_maternelle_cents = models.IntegerField(
         "prix maternelle (centimes)",
         default=0,
