@@ -29,7 +29,7 @@
         <tr>
           <th>Date</th>
           <th>Plat principal</th>
-          <th class="text-end">Prix</th>
+          <th class="text-end">Prix (mat / prim / adulte / potage)</th>
           <th>Clôture des réservations</th>
           <th class="text-end">Réservations</th>
           <th class="text-end">Actions</th>
@@ -50,8 +50,11 @@
               <div class="text-muted small">{{ menu.description }}</div>
             {% endif %}
           </td>
-          <td class="text-end">
-            {{ menu.prix_euros|floatformat:2 }} €
+          <td class="text-end small">
+            {{ menu.prix_maternelle_euros|floatformat:2 }} €
+            / {{ menu.prix_primaire_euros|floatformat:2 }} €
+            / {{ menu.prix_adulte_euros|floatformat:2 }} €
+            / {{ menu.prix_potage_euros|floatformat:2 }} €
           </td>
           <td>{{ menu.ferme_a|date:"d/m/Y H:i" }}</td>
           <td class="text-end">

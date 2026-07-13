@@ -82,19 +82,46 @@ class DeclarationVirementForm(forms.Form):
 class MenuForm(forms.ModelForm):
     """ModelForm de gestion des menus par la cuisinière.
 
-    Le prix est saisi en euros par la cuisinière, mais le modèle
-    stocke `prix_cents` en centimes (convention monétaire du projet).
-    On expose donc un champ `prix_euros` en lieu et place du champ
-    natif, puis on convertit dans `save()`. Le champ `date` étant
-    `unique` sur `Menu`, ModelForm valide déjà l'unicité et produit
-    une erreur de formulaire propre en cas de doublon (pas un 500).
+    Les prix sont saisis en euros par la cuisinière, mais le modèle
+    stocke les valeurs en centimes (convention monétaire du projet).
+    On expose donc 4 champs `prix_*_euros` (maternelle, primaire,
+    adulte, potage) en lieu et place des champs natifs, puis on
+    convertit dans `save()`. Le champ `date` étant `unique` sur
+    `Menu`, ModelForm valide déjà l'unicité et produit une erreur de
+    formulaire propre en cas de doublon (pas un 500).
     """
 
-    prix_euros = forms.DecimalField(
-        label="Prix (€)",
+    prix_maternelle_euros = forms.DecimalField(
+        label="Prix maternelle (€)",
         min_value=Decimal("0.01"),
         decimal_places=2,
-        help_text="Prix du repas en euros (converti en centimes pour le stockage).",
+        help_text="Prix du repas complet pour un enfant de maternelle.",
+    )
+    prix_primaire_euros = forms.DecimalField(
+        label="Prix primaire (€)",
+        min_value=Decimal("0.01"),
+        decimal_places=2,
+        help_text="Prix du repas complet pour un enfant de primaire.",
+    )
+    prix_adulte_euros = forms.DecimalField(
+        label="Prix adulte (€)",
+        min_value=Decimal("0.01"),
+        decimal_places=2,
+        help_text="Prix du repas complet pour un adulte (usage futur).",
+    )
+    prix_potage_euros = forms.DecimalField(
+        label="Prix potage seul (€)",
+        min_value=Decimal("0.01"),
+        decimal_places=2,
+        help_text="Prix de la formule potage seul (identique pour tous).",
+    )
+
+    # Correspondance champ euros ↔ attribut modèle en centimes.
+    CHAMPS_PRIX = (
+        ("prix_maternelle_euros", "prix_maternelle_cents"),
+        ("prix_primaire_euros", "prix_primaire_cents"),
+        ("prix_adulte_euros", "prix_adulte_cents"),
+        ("prix_potage_euros", "prix_potage_cents"),
     )
 
     class Meta:
@@ -110,11 +137,14 @@ class MenuForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Pré-remplit prix_euros à partir de prix_cents en édition.
+        # Pré-remplit les 4 champs euros à partir des attributs en centimes
+        # du modèle, en édition uniquement.
         if self.instance and self.instance.pk:
-            self.fields["prix_euros"].initial = (
-                Decimal(self.instance.prix_cents) / Decimal(100)
-            )
+            for champ_euros, attr_cents in self.CHAMPS_PRIX:
+                self.fields[champ_euros].initial = (
+                    Decimal(getattr(self.instance, attr_cents) or 0)
+                    / Decimal(100)
+                )
         # Le widget datetime-local n'accepte pas les secondes/fuseau ;
         # il faut aussi reformater la valeur initiale en édition.
         self.fields["ferme_a"].input_formats = [
@@ -125,9 +155,12 @@ class MenuForm(forms.ModelForm):
 
     def save(self, commit=True):
         menu = super().save(commit=False)
-        menu.prix_cents = int(
-            round(self.cleaned_data["prix_euros"] * Decimal(100))
-        )
+        for champ_euros, attr_cents in self.CHAMPS_PRIX:
+            setattr(
+                menu,
+                attr_cents,
+                int(round(self.cleaned_data[champ_euros] * Decimal(100))),
+            )
         if commit:
             menu.save()
         return menu
