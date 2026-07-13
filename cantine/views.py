@@ -763,16 +763,41 @@ def comptabilite_suivi_enfants(request):
     if classe_active is not None:
         enfants = enfants.filter(classe=classe_active)
 
-    # Prix de repas de référence pour le seuil « solde faible » : celui
-    # du menu le plus récent, à défaut une valeur de secours.
+    # Fallback quand aucune réservation à venir n'existe pour un enfant :
+    # on utilise le prix primaire du menu le plus récent, à défaut la
+    # valeur de secours PRIX_REPAS_DEFAUT_CENTS.
     dernier_menu = Menu.objects.order_by("-date").first()
-    prix_repas_cents = (
-        dernier_menu.prix_cents if dernier_menu else PRIX_REPAS_DEFAUT_CENTS
+    prix_repas_fallback_cents = (
+        dernier_menu.prix_primaire_cents
+        if dernier_menu
+        else PRIX_REPAS_DEFAUT_CENTS
     )
 
     lignes = []
     for enfant in enfants:
         solde = enfant.parent.solde_cents
+
+        # Prix de référence pour le seuil « solde faible » : le prix
+        # de la prochaine réservation à venir de l'enfant, calculé via
+        # prix_pour(enfant, formule). À défaut, on retombe sur le prix
+        # primaire du dernier menu créé (ou la valeur de secours).
+        prochaine_resa = (
+            Reservation.objects.filter(
+                enfant=enfant,
+                menu__date__gte=aujourd_hui,
+            )
+            .exclude(statut=Reservation.STATUT_ANNULEE)
+            .select_related("menu")
+            .order_by("menu__date")
+            .first()
+        )
+        if prochaine_resa is not None:
+            prix_repas_cents = prochaine_resa.menu.prix_pour(
+                enfant, prochaine_resa.formule
+            )
+        else:
+            prix_repas_cents = prix_repas_fallback_cents
+
         # Alerte : rouge si solde négatif ; orange si solde faible (entre
         # 0 et le prix d'un repas) alors que des repas ont été mangés.
         if solde < 0:
