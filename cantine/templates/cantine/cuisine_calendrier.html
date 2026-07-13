@@ -1,0 +1,70 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Cuisine — calendrier des repas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">Cuisine — 30 prochains jours</h1>
+  <a href="{% url 'cantine:cuisine_aujourdhui' %}"
+     class="btn btn-outline-primary">
+    Voir le jour même
+  </a>
+</div>
+
+<p class="text-muted">
+  Nombre de repas à préparer par jour (réservations confirmées, présence
+  matin OK ou déjà servies). Cliquer sur une date pour la vue détaillée.
+</p>
+
+{% if jours %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Date</th>
+          <th>Menu(s)</th>
+          <th class="text-end">Repas à préparer</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for jour in jours %}
+        <tr>
+          <td>
+            <strong>{{ jour.date|date:"l d/m/Y"|capfirst }}</strong>
+            {% if jour.date == aujourd_hui %}
+              <span class="badge bg-primary ms-1">Aujourd'hui</span>
+            {% endif %}
+          </td>
+          <td>
+            {% for menu in jour.menus %}
+              <div>
+                {{ menu.plat_principal }}
+                {% if menu.description %}
+                  <span class="text-muted small">— {{ menu.description }}</span>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </td>
+          <td class="text-end">
+            <span class="badge bg-info text-dark fs-6">
+              {{ jour.total }}
+            </span>
+          </td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-primary"
+               href="{% url 'cantine:cuisine_jour' date=jour.date|date:'Y-m-d' %}">
+              Détail
+            </a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="alert alert-secondary">
+    Aucun menu prévu dans les 30 prochains jours.
+  </div>
+{% endif %}
+{% endblock %}

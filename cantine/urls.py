@@ -36,4 +36,10 @@ urlpatterns = [
         views.declarer_virement,
         name="declarer_virement",
     ),
+    # --- Espace cuisinière ------------------------------------------
+    path(
+        "cuisine/calendrier/",
+        views.cuisine_calendrier,
+        name="cuisine_calendrier",
+    ),
 ]

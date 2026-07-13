@@ -1,8 +1,8 @@
-"""Vues de l'app cantine (espace parents).
+"""Vues de l'app cantine (espace parents + espace cuisine).
 
-Toutes les vues « métier » sont protégées par @login_required : un
-parent doit être connecté pour voir ses enfants, réserver, etc. La
-racine `/` redirige selon l'état d'authentification.
+Les vues parents sont protégées par @login_required, les vues cuisine
+par @cuisine_required (appartenance au groupe Django « Cuisine »).
+La racine `/` redirige selon l'état d'authentification.
 """
 
 from datetime import timedelta
@@ -10,14 +10,25 @@ from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from .decorators import cuisine_required
 from .forms import DeclarationVirementForm, InscriptionParentForm
 from .models import Enfant, Menu, Paiement, Reservation
+
+
+# Statuts « à préparer/servir » : tout ce qui n'est ni annulé ni en
+# attente de paiement. Utilisé pour compter les repas côté cuisine.
+STATUTS_A_PREPARER = [
+    Reservation.STATUT_CONFIRMEE,
+    Reservation.STATUT_PRESENCE_OK,
+    Reservation.STATUT_MANGEE,
+]
 
 
 def racine(request):
@@ -215,4 +226,54 @@ def declarer_virement(request):
         request,
         "cantine/declarer_virement.html",
         {"form": form},
+    )
+
+
+# ---------------------------------------------------------------------
+# Espace cuisinière
+# ---------------------------------------------------------------------
+
+
+@cuisine_required
+def cuisine_calendrier(request):
+    """Liste des 30 prochains jours pour anticiper les commandes.
+
+    Affiche, pour chaque jour ayant un menu, le plat principal et le
+    nombre de repas réservés/confirmés (statuts « à préparer »).
+    """
+    aujourd_hui = timezone.now().date()
+    limite = aujourd_hui + timedelta(days=30)
+
+    menus = (
+        Menu.objects.filter(date__gte=aujourd_hui, date__lte=limite)
+        .annotate(
+            nb_repas=Count(
+                "reservations",
+                filter=Q(reservations__statut__in=STATUTS_A_PREPARER),
+            )
+        )
+        .order_by("date", "plat_principal")
+    )
+
+    # Regroupement par date : plusieurs menus peuvent exister le même
+    # jour (rare, mais le modèle Menu a `unique=True` sur date donc en
+    # pratique c'est un menu par jour ; on regroupe quand même pour
+    # rester tolérant à un futur assouplissement).
+    jours = {}
+    for menu in menus:
+        entree = jours.setdefault(
+            menu.date,
+            {"date": menu.date, "menus": [], "total": 0},
+        )
+        entree["menus"].append(menu)
+        entree["total"] += menu.nb_repas
+    jours_ordonnes = sorted(jours.values(), key=lambda j: j["date"])
+
+    return render(
+        request,
+        "cantine/cuisine_calendrier.html",
+        {
+            "jours": jours_ordonnes,
+            "aujourd_hui": aujourd_hui,
+        },
     )
