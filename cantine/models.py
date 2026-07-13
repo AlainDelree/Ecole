@@ -53,7 +53,21 @@ class ProfilParent(models.Model):
 class Classe(models.Model):
     """Une classe de l'école, ex. « 3e primaire A »."""
 
+    NIVEAU_MATERNELLE = "maternelle"
+    NIVEAU_PRIMAIRE = "primaire"
+    NIVEAU_CHOICES = [
+        (NIVEAU_MATERNELLE, "Maternelle"),
+        (NIVEAU_PRIMAIRE, "Primaire"),
+    ]
+
     nom = models.CharField("nom", max_length=50, unique=True)
+    niveau = models.CharField(
+        "niveau",
+        max_length=20,
+        choices=NIVEAU_CHOICES,
+        default=NIVEAU_PRIMAIRE,
+        help_text="Détermine le tarif applicable aux enfants de cette classe.",
+    )
 
     class Meta:
         verbose_name = "classe"
@@ -108,8 +122,36 @@ class Menu(models.Model):
     plat_principal = models.CharField("plat principal", max_length=200)
     description = models.TextField("description / accompagnements", blank=True)
     prix_cents = models.IntegerField(
-        "prix (centimes)",
-        help_text="Prix du repas en centimes d'euro.",
+        "prix (centimes) — obsolète",
+        null=True,
+        blank=True,
+        help_text=(
+            "Champ conservé temporairement pour la migration ; supprimé par "
+            "une migration ultérieure. Utiliser les champs prix_*_cents."
+        ),
+    )
+    prix_maternelle_cents = models.IntegerField(
+        "prix maternelle (centimes)",
+        default=0,
+        help_text="Prix du repas complet pour un enfant de maternelle.",
+    )
+    prix_primaire_cents = models.IntegerField(
+        "prix primaire (centimes)",
+        default=0,
+        help_text="Prix du repas complet pour un enfant de primaire.",
+    )
+    prix_adulte_cents = models.IntegerField(
+        "prix adulte (centimes)",
+        default=0,
+        help_text=(
+            "Prix du repas pour un adulte (personnel/enseignants). "
+            "Réservé à un usage futur."
+        ),
+    )
+    prix_potage_cents = models.IntegerField(
+        "prix potage (centimes)",
+        default=0,
+        help_text="Prix de la formule « potage seul », identique pour tous.",
     )
     ferme_a = models.DateTimeField(
         "clôture des réservations",
@@ -124,9 +166,35 @@ class Menu(models.Model):
     def __str__(self):
         return f"{self.date:%d/%m/%Y} — {self.plat_principal}"
 
+    def prix_pour(self, enfant, formule):
+        """Retourne le prix (en centimes) applicable pour cet enfant + formule.
+
+        La formule « potage » applique `prix_potage_cents` sans regarder le
+        niveau (c'est un tarif unique). La formule « complet » choisit entre
+        `prix_maternelle_cents` et `prix_primaire_cents` selon le niveau de
+        la classe de l'enfant.
+        """
+        if formule == Reservation.FORMULE_POTAGE:
+            return self.prix_potage_cents
+        if enfant.classe.niveau == Classe.NIVEAU_MATERNELLE:
+            return self.prix_maternelle_cents
+        return self.prix_primaire_cents
+
     @property
-    def prix_euros(self):
-        return round(self.prix_cents / 100, 2)
+    def prix_maternelle_euros(self):
+        return round(self.prix_maternelle_cents / 100, 2)
+
+    @property
+    def prix_primaire_euros(self):
+        return round(self.prix_primaire_cents / 100, 2)
+
+    @property
+    def prix_adulte_euros(self):
+        return round(self.prix_adulte_cents / 100, 2)
+
+    @property
+    def prix_potage_euros(self):
+        return round(self.prix_potage_cents / 100, 2)
 
 
 class Reservation(models.Model):
@@ -154,6 +222,13 @@ class Reservation(models.Model):
         (STATUT_ANNULEE, "Annulée"),
     ]
 
+    FORMULE_COMPLET = "complet"
+    FORMULE_POTAGE = "potage"
+    FORMULE_CHOICES = [
+        (FORMULE_COMPLET, "Repas complet"),
+        (FORMULE_POTAGE, "Potage seul"),
+    ]
+
     enfant = models.ForeignKey(
         Enfant,
         on_delete=models.CASCADE,
@@ -171,6 +246,13 @@ class Reservation(models.Model):
         max_length=30,
         choices=STATUT_CHOICES,
         default=STATUT_EN_ATTENTE,
+    )
+    formule = models.CharField(
+        "formule",
+        max_length=20,
+        choices=FORMULE_CHOICES,
+        default=FORMULE_COMPLET,
+        help_text="Repas complet ou potage seul (choisi à la réservation).",
     )
     date_reservation = models.DateTimeField("date de réservation", auto_now_add=True)
 
@@ -198,8 +280,9 @@ class Reservation(models.Model):
         self.statut = self.STATUT_MANGEE
         self.save(update_fields=["statut"])
 
+        prix_du_repas = self.menu.prix_pour(self.enfant, self.formule)
         ProfilParent.objects.filter(pk=self.enfant.parent_id).update(
-            solde_cents=models.F("solde_cents") - self.menu.prix_cents
+            solde_cents=models.F("solde_cents") - prix_du_repas
         )
         return True
 
