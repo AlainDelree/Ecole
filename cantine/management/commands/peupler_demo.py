@@ -13,6 +13,7 @@ from django.utils import timezone
 from cantine.models import Classe, Enfant, Menu
 
 NOM_GROUPE_CUISINE = "Cuisine"
+NOM_GROUPE_COMPTABILITE = "Comptabilite"
 
 
 PLATS_DEMO = [
@@ -143,6 +144,26 @@ class Command(BaseCommand):
             self.stdout.write("  + Utilisateur : cuisine (mdp = cuisine1234)")
         cuisine_user.groups.add(groupe_cuisine)
 
+        # --- Groupe et utilisateur de démo « Comptabilite » -------------
+        # Appartenance au groupe uniquement : pas de statut staff, la
+        # compta passe désormais par l'interface dédiée, plus par l'admin.
+        groupe_compta, _ = Group.objects.get_or_create(
+            name=NOM_GROUPE_COMPTABILITE
+        )
+        compta_user, cree = User.objects.get_or_create(
+            username="compta",
+            defaults={
+                "first_name": "Compta",
+                "last_name": "Démo",
+                "email": "",
+            },
+        )
+        if cree:
+            compta_user.set_password("compta1234")
+            compta_user.save()
+            self.stdout.write("  + Utilisateur : compta (mdp = compta1234)")
+        compta_user.groups.add(groupe_compta)
+
         self.stdout.write(self.style.SUCCESS(
             f"Données de démo prêtes : {len(classes)} classes, "
             f"{len(parents)} parents, {len(enfants_config)} enfants, "
@@ -154,4 +175,7 @@ class Command(BaseCommand):
         )
         self.stdout.write(
             "Compte cuisine : cuisine — mot de passe : cuisine1234"
+        )
+        self.stdout.write(
+            "Compte compta : compta — mot de passe : compta1234"
         )

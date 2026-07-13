@@ -17,10 +17,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .decorators import cuisine_required
+from .decorators import comptabilite_required, cuisine_required
 from .forms import DeclarationVirementForm, InscriptionParentForm, MenuForm
 from .generateur_menus import generer_suggestions
-from .models import Enfant, Menu, Paiement, Reservation
+from .models import Classe, Enfant, Menu, Paiement, Reservation
 
 
 # Nombre de suggestions générées par pool (mixte / végétarien) et
@@ -557,4 +557,199 @@ def cuisine_marquer_mangee(request, reservation_id):
             )
     return redirect(
         "cantine:cuisine_jour", date=resa.menu.date.isoformat()
+    )
+
+
+# ---------------------------------------------------------------------
+# Espace comptabilité
+# ---------------------------------------------------------------------
+
+
+# Statuts de paiement autorisés dans le filtre GET de la liste des
+# paiements. Toute autre valeur retombe sur « déclarés » par défaut.
+FILTRES_PAIEMENT = {
+    Paiement.STATUT_DECLARE: "Déclarés",
+    Paiement.STATUT_VALIDE: "Validés",
+    Paiement.STATUT_REJETE: "Rejetés",
+    "tous": "Tous",
+}
+
+# Prix de repas de secours (centimes) si aucun menu n'existe encore en
+# base : sert de référence au badge « solde faible » du suivi enfants.
+PRIX_REPAS_DEFAUT_CENTS = 600
+
+# Fenêtre par défaut (en jours) du suivi croisé repas/paiements.
+SUIVI_PERIODE_JOURS_DEFAUT = 30
+
+
+@comptabilite_required
+def comptabilite_paiements(request):
+    """Liste des paiements avec filtre par statut (déclarés par défaut).
+
+    Les paiements au statut « déclaré » exposent les actions Valider /
+    Rejeter (POST). Le filtre se pilote via `?statut=` (declare, valide,
+    rejete ou tous).
+    """
+    statut = request.GET.get("statut", Paiement.STATUT_DECLARE)
+    if statut not in FILTRES_PAIEMENT:
+        statut = Paiement.STATUT_DECLARE
+
+    paiements = Paiement.objects.select_related(
+        "parent", "parent__utilisateur"
+    )
+    if statut != "tous":
+        paiements = paiements.filter(statut=statut)
+    paiements = paiements.order_by("-date_declaration")
+
+    return render(
+        request,
+        "cantine/comptabilite_paiements.html",
+        {
+            "paiements": paiements,
+            "statut_actif": statut,
+            "filtres": FILTRES_PAIEMENT,
+        },
+    )
+
+
+@comptabilite_required
+@require_POST
+def comptabilite_paiement_valider(request, pk):
+    """Valide un paiement déclaré (crédite le solde) puis revient à la liste."""
+    paiement = get_object_or_404(
+        Paiement.objects.select_related("parent", "parent__utilisateur"),
+        pk=pk,
+    )
+    change = paiement.valider()
+    if change:
+        messages.success(
+            request,
+            f"Paiement de {paiement.parent} "
+            f"({paiement.montant_euros:.2f} €) validé : solde crédité.",
+        )
+    else:
+        messages.info(
+            request,
+            f"Le paiement de {paiement.parent} était déjà validé : "
+            "aucun crédit supplémentaire.",
+        )
+    return redirect(_retour_paiements(request))
+
+
+@comptabilite_required
+@require_POST
+def comptabilite_paiement_rejeter(request, pk):
+    """Rejette un paiement déclaré (sans créditer) puis revient à la liste."""
+    paiement = get_object_or_404(
+        Paiement.objects.select_related("parent", "parent__utilisateur"),
+        pk=pk,
+    )
+    commentaire = (request.POST.get("commentaire_compta") or "").strip()
+    change = paiement.rejeter(commentaire=commentaire)
+    if change:
+        messages.success(
+            request,
+            f"Paiement de {paiement.parent} "
+            f"({paiement.montant_euros:.2f} €) rejeté.",
+        )
+    else:
+        messages.warning(
+            request,
+            f"Le paiement de {paiement.parent} ne peut plus être rejeté "
+            f"(statut actuel : « {paiement.get_statut_display()} »).",
+        )
+    return redirect(_retour_paiements(request))
+
+
+def _retour_paiements(request):
+    """URL de retour vers la liste des paiements en conservant le filtre."""
+    statut = request.POST.get("statut")
+    url = reverse("cantine:comptabilite_paiements")
+    if statut in FILTRES_PAIEMENT:
+        url = f"{url}?statut={statut}"
+    return url
+
+
+@comptabilite_required
+def comptabilite_suivi_enfants(request):
+    """Suivi croisé repas/paiements par enfant sur une période récente.
+
+    Pour chaque enfant (filtrable par classe via `?classe=`), on compte
+    sur les N derniers jours les repas réservés (hors annulés) et
+    effectivement mangés, et on affiche le solde du parent avec un
+    indicateur d'alerte quand ce solde est bas.
+    """
+    aujourd_hui = timezone.now().date()
+    depuis = aujourd_hui - timedelta(days=SUIVI_PERIODE_JOURS_DEFAUT)
+
+    # Filtre optionnel par classe (paramètre GET numérique).
+    classe_id = request.GET.get("classe")
+    classe_active = None
+    if classe_id:
+        classe_active = Classe.objects.filter(pk=classe_id).first()
+
+    # Repas de la période : bornés par la date du menu (menu__date).
+    dans_periode = Q(
+        reservations__menu__date__gte=depuis,
+        reservations__menu__date__lte=aujourd_hui,
+    )
+    enfants = (
+        Enfant.objects.select_related(
+            "classe", "parent", "parent__utilisateur"
+        )
+        .annotate(
+            nb_reserves=Count(
+                "reservations",
+                filter=dans_periode
+                & ~Q(reservations__statut=Reservation.STATUT_ANNULEE),
+            ),
+            nb_manges=Count(
+                "reservations",
+                filter=dans_periode
+                & Q(reservations__statut=Reservation.STATUT_MANGEE),
+            ),
+        )
+        .order_by("classe__nom", "nom", "prenom")
+    )
+    if classe_active is not None:
+        enfants = enfants.filter(classe=classe_active)
+
+    # Prix de repas de référence pour le seuil « solde faible » : celui
+    # du menu le plus récent, à défaut une valeur de secours.
+    dernier_menu = Menu.objects.order_by("-date").first()
+    prix_repas_cents = (
+        dernier_menu.prix_cents if dernier_menu else PRIX_REPAS_DEFAUT_CENTS
+    )
+
+    lignes = []
+    for enfant in enfants:
+        solde = enfant.parent.solde_cents
+        # Alerte : rouge si solde négatif ; orange si solde faible (entre
+        # 0 et le prix d'un repas) alors que des repas ont été mangés.
+        if solde < 0:
+            alerte = "rouge"
+        elif 0 <= solde <= prix_repas_cents and enfant.nb_manges > 0:
+            alerte = "orange"
+        else:
+            alerte = None
+        lignes.append(
+            {
+                "enfant": enfant,
+                "solde_euros": round(solde / 100, 2),
+                "nb_reserves": enfant.nb_reserves,
+                "nb_manges": enfant.nb_manges,
+                "alerte": alerte,
+            }
+        )
+
+    return render(
+        request,
+        "cantine/comptabilite_suivi_enfants.html",
+        {
+            "lignes": lignes,
+            "classes": Classe.objects.all(),
+            "classe_active": classe_active,
+            "periode_jours": SUIVI_PERIODE_JOURS_DEFAUT,
+            "depuis": depuis,
+        },
     )

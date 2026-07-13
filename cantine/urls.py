@@ -77,4 +77,25 @@ urlpatterns = [
         views.cuisine_menu_supprimer,
         name="cuisine_menu_supprimer",
     ),
+    # --- Espace comptabilité ----------------------------------------
+    path(
+        "comptabilite/paiements/",
+        views.comptabilite_paiements,
+        name="comptabilite_paiements",
+    ),
+    path(
+        "comptabilite/paiements/<int:pk>/valider/",
+        views.comptabilite_paiement_valider,
+        name="comptabilite_paiement_valider",
+    ),
+    path(
+        "comptabilite/paiements/<int:pk>/rejeter/",
+        views.comptabilite_paiement_rejeter,
+        name="comptabilite_paiement_rejeter",
+    ),
+    path(
+        "comptabilite/suivi-enfants/",
+        views.comptabilite_suivi_enfants,
+        name="comptabilite_suivi_enfants",
+    ),
 ]

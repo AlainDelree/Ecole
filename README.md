@@ -55,9 +55,10 @@ chaque parcours sans créer de compte à la main.
 
 | Identifiant                     | Mot de passe | Rôle           |
 |---------------------------------|--------------|----------------|
-| parent.dupont@example.be        | demo1234     | Parent         |
-| parent.lemoine@example.be       | demo1234     | Parent         |
-| cuisine                         | cuisine1234  | Groupe Cuisine |
+| parent.dupont@example.be        | demo1234     | Parent               |
+| parent.lemoine@example.be       | demo1234     | Parent               |
+| cuisine                         | cuisine1234  | Groupe Cuisine       |
+| compta                          | compta1234   | Groupe Comptabilite  |
 
 **Superutilisateur (compta)** — *non* créé par `peupler_demo` : il se
 crée manuellement à l'installation avec `python manage.py createsuperuser`.
@@ -72,6 +73,13 @@ Ce parent a déjà des enfants rattachés dans les données de démo.
 **Cuisine** — le compte `cuisine` (mot de passe `cuisine1234`) est membre
 du groupe Django `Cuisine` et accède aux vues cuisinière
 (`/cuisine/calendrier/`, `/cuisine/aujourdhui/`) et à la gestion des menus.
+
+**Comptabilité** — le compte `compta` (mot de passe `compta1234`) est
+membre du groupe Django `Comptabilite` (sans statut staff) et accède à
+l'interface dédiée : validation/rejet des paiements
+(`/comptabilite/paiements/`) et suivi croisé repas/paiements par enfant
+(`/comptabilite/suivi-enfants/`). Il ne peut ni créer ni modifier les
+enfants, classes ou menus — uniquement consulter.
 
 ## Structure principale
 

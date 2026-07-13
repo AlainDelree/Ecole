@@ -1,0 +1,85 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Comptabilité — Suivi enfants{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h1 class="mb-0">Suivi repas / paiements</h1>
+  <span class="text-muted small">
+    Période : {{ periode_jours }} derniers jours (depuis le {{ depuis|date:"d/m/Y" }})
+  </span>
+</div>
+
+{# Filtre optionnel par classe (paramètre GET ?classe=) #}
+<form method="get" class="row row-cols-lg-auto g-2 align-items-end mb-3">
+  <div class="col-12">
+    <label for="filtre-classe" class="form-label small mb-1">Classe</label>
+    <select class="form-select form-select-sm" id="filtre-classe"
+            name="classe" onchange="this.form.submit()">
+      <option value="">Toutes les classes</option>
+      {% for classe in classes %}
+        <option value="{{ classe.id }}"
+          {% if classe_active and classe_active.id == classe.id %}selected{% endif %}>
+          {{ classe.nom }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12">
+    <noscript><button type="submit" class="btn btn-sm btn-primary">Filtrer</button></noscript>
+  </div>
+</form>
+
+{% if lignes %}
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Enfant</th>
+          <th>Classe</th>
+          <th>Parent</th>
+          <th class="text-end">Repas réservés</th>
+          <th class="text-end">Repas mangés</th>
+          <th class="text-end">Solde parent</th>
+          <th>Alerte</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for ligne in lignes %}
+        <tr>
+          <td>{{ ligne.enfant.prenom }} {{ ligne.enfant.nom }}</td>
+          <td>{{ ligne.enfant.classe.nom }}</td>
+          <td>{{ ligne.enfant.parent }}</td>
+          <td class="text-end">{{ ligne.nb_reserves }}</td>
+          <td class="text-end">{{ ligne.nb_manges }}</td>
+          <td class="text-end">
+            <span class="{% if ligne.solde_euros < 0 %}text-danger fw-bold{% endif %}">
+              {{ ligne.solde_euros|floatformat:2 }} €
+            </span>
+          </td>
+          <td>
+            {% if ligne.alerte == 'rouge' %}
+              <span class="badge bg-danger">À surveiller</span>
+            {% elif ligne.alerte == 'orange' %}
+              <span class="badge bg-warning text-dark">Solde faible</span>
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-muted small">
+    « Repas réservés » = réservations dont le repas tombe dans la période
+    (tous statuts sauf annulé). « Repas mangés » = réservations validées
+    au service.
+  </p>
+{% else %}
+  <div class="alert alert-secondary">
+    Aucun enfant à afficher{% if classe_active %} pour la classe
+    « {{ classe_active.nom }} »{% endif %}.
+  </div>
+{% endif %}
+{% endblock %}

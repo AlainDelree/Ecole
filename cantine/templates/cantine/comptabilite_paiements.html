@@ -1,0 +1,106 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Comptabilité — Paiements{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">Paiements déclarés</h1>
+</div>
+
+{# Filtre par statut : onglets pilotant le paramètre GET ?statut= #}
+<ul class="nav nav-pills mb-3">
+  {% for cle, libelle in filtres.items %}
+    <li class="nav-item">
+      <a class="nav-link {% if statut_actif == cle %}active{% endif %}"
+         href="?statut={{ cle }}">
+        {{ libelle }}
+      </a>
+    </li>
+  {% endfor %}
+</ul>
+
+{% if paiements %}
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Parent</th>
+          <th class="text-end">Montant</th>
+          <th>Référence virement</th>
+          <th>Déclaré le</th>
+          <th>Statut</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for paiement in paiements %}
+        <tr>
+          <td>{{ paiement.parent }}</td>
+          <td class="text-end">{{ paiement.montant_euros|floatformat:2 }} €</td>
+          <td>{{ paiement.reference_virement }}</td>
+          <td>{{ paiement.date_declaration|date:"d/m/Y H:i" }}</td>
+          <td>
+            {% if paiement.statut == 'valide' %}
+              <span class="badge bg-success">Validé</span>
+            {% elif paiement.statut == 'rejete' %}
+              <span class="badge bg-danger">Rejeté</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Déclaré</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if paiement.statut == 'declare' %}
+              <div class="d-flex justify-content-end gap-2">
+                <form method="post"
+                      action="{% url 'cantine:comptabilite_paiement_valider' pk=paiement.id %}"
+                      class="m-0">
+                  {% csrf_token %}
+                  <input type="hidden" name="statut" value="{{ statut_actif }}">
+                  <button type="submit" class="btn btn-sm btn-success">Valider</button>
+                </form>
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#rejet-{{ paiement.id }}"
+                        aria-expanded="false">
+                  Rejeter
+                </button>
+              </div>
+              <div class="collapse mt-2 text-start" id="rejet-{{ paiement.id }}">
+                <form method="post"
+                      action="{% url 'cantine:comptabilite_paiement_rejeter' pk=paiement.id %}"
+                      class="m-0">
+                  {% csrf_token %}
+                  <input type="hidden" name="statut" value="{{ statut_actif }}">
+                  <div class="mb-2">
+                    <label for="commentaire-{{ paiement.id }}" class="form-label small mb-1">
+                      Commentaire (optionnel)
+                    </label>
+                    <textarea class="form-control form-control-sm"
+                              id="commentaire-{{ paiement.id }}"
+                              name="commentaire_compta" rows="2"
+                              placeholder="Motif du rejet…"></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-sm btn-danger">
+                    Confirmer le rejet
+                  </button>
+                </form>
+              </div>
+            {% else %}
+              {% if paiement.commentaire_compta %}
+                <span class="text-muted small">{{ paiement.commentaire_compta }}</span>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="alert alert-secondary">
+    Aucun paiement pour ce filtre.
+  </div>
+{% endif %}
+{% endblock %}

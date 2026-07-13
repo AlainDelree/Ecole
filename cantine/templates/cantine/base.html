@@ -45,7 +45,7 @@
         <li class="nav-item">
           <a class="nav-link" href="{% url 'cantine:declarer_virement' %}">Déclarer un virement</a>
         </li>
-        {# Liens supplémentaires réservés au groupe « Cuisine ». #}
+        {# Liens supplémentaires réservés aux groupes métier. #}
         {% for g in user.groups.all %}
           {% if g.name == "Cuisine" %}
             <li class="nav-item">
@@ -53,6 +53,14 @@
             </li>
             <li class="nav-item">
               <a class="nav-link" href="{% url 'cantine:cuisine_menus' %}">Gérer les menus</a>
+            </li>
+          {% endif %}
+          {% if g.name == "Comptabilite" %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'cantine:comptabilite_paiements' %}">Comptabilité — Paiements</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'cantine:comptabilite_suivi_enfants' %}">Comptabilité — Suivi enfants</a>
             </li>
           {% endif %}
         {% endfor %}

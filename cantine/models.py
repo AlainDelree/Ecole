@@ -285,3 +285,21 @@ class Paiement(models.Model):
             solde_cents=models.F("solde_cents") + self.montant_cents
         )
         return True
+
+    def rejeter(self, commentaire: str = ""):
+        """Passe le paiement à `rejete` sans créditer le solde.
+
+        Idempotent et sûr : on ne rejette qu'un paiement encore au
+        statut `declare`. Si le paiement est déjà validé ou déjà
+        rejeté, on ne change rien et on renvoie False (le solde d'un
+        paiement validé ne doit surtout pas être décrédité par un
+        rejet tardif). Renvoie True si le rejet a bien été appliqué.
+        """
+        if self.statut != self.STATUT_DECLARE:
+            return False
+
+        self.statut = self.STATUT_REJETE
+        if commentaire:
+            self.commentaire_compta = commentaire
+        self.save(update_fields=["statut", "commentaire_compta"])
+        return True
