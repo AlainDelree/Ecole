@@ -1,0 +1,39 @@
+{% extends "cantine/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+  {% if menu %}Modifier le menu du {{ menu.date|date:"d/m/Y" }}{% else %}Créer un menu{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h1 class="mb-0">
+        {% if menu %}
+          Modifier le menu du {{ menu.date|date:"d/m/Y" }}
+        {% else %}
+          Créer un menu
+        {% endif %}
+      </h1>
+      <a href="{% url 'cantine:cuisine_menus' %}"
+         class="btn btn-outline-secondary">
+        ← Liste
+      </a>
+    </div>
+
+    <form method="post" class="card card-body shadow-sm">
+      {% csrf_token %}
+      {{ form|crispy }}
+      <div class="d-flex gap-2 mt-2">
+        <button type="submit" class="btn btn-primary">
+          {% if menu %}Enregistrer{% else %}Créer{% endif %}
+        </button>
+        <a href="{% url 'cantine:cuisine_menus' %}" class="btn btn-outline-secondary">
+          Annuler
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

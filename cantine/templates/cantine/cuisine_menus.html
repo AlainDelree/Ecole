@@ -1,0 +1,91 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Cuisine — gestion des menus{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">Gestion des menus</h1>
+  <div>
+    <a href="{% url 'cantine:cuisine_calendrier' %}"
+       class="btn btn-outline-secondary">
+      ← Calendrier
+    </a>
+    <a href="{% url 'cantine:cuisine_menu_creer' %}"
+       class="btn btn-primary">
+      + Créer un menu
+    </a>
+  </div>
+</div>
+
+<p class="text-muted">
+  Menus à venir (date ≥ aujourd'hui). Un menu réservé ne peut pas être
+  supprimé : annulez d'abord les réservations concernées dans l'admin.
+</p>
+
+{% if menus %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Date</th>
+          <th>Plat principal</th>
+          <th class="text-end">Prix</th>
+          <th>Clôture des réservations</th>
+          <th class="text-end">Réservations</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for menu in menus %}
+        <tr>
+          <td>
+            <strong>{{ menu.date|date:"l d/m/Y"|capfirst }}</strong>
+            {% if menu.date == aujourd_hui %}
+              <span class="badge bg-primary ms-1">Aujourd'hui</span>
+            {% endif %}
+          </td>
+          <td>
+            {{ menu.plat_principal }}
+            {% if menu.description %}
+              <div class="text-muted small">{{ menu.description }}</div>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {{ menu.prix_euros|floatformat:2 }} €
+          </td>
+          <td>{{ menu.ferme_a|date:"d/m/Y H:i" }}</td>
+          <td class="text-end">
+            <span class="badge bg-info text-dark">
+              {{ menu.nb_reservations }}
+            </span>
+          </td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-primary"
+               href="{% url 'cantine:cuisine_menu_modifier' pk=menu.pk %}">
+              Modifier
+            </a>
+            <form method="post"
+                  action="{% url 'cantine:cuisine_menu_supprimer' pk=menu.pk %}"
+                  class="d-inline"
+                  onsubmit="return confirm('Supprimer le menu du {{ menu.date|date:"d/m/Y" }} ?');">
+              {% csrf_token %}
+              <button type="submit"
+                      class="btn btn-sm btn-outline-danger"
+                      {% if menu.nb_reservations %}disabled
+                      title="Menu réservé : suppression impossible"{% endif %}>
+                Supprimer
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="alert alert-secondary">
+    Aucun menu à venir. Utilisez le bouton
+    <em>« + Créer un menu »</em> pour en ajouter un.
+  </div>
+{% endif %}
+{% endblock %}
