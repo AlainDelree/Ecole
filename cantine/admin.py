@@ -38,7 +38,8 @@ class ProfilParentAdmin(admin.ModelAdmin):
 
 @admin.register(Classe)
 class ClasseAdmin(admin.ModelAdmin):
-    list_display = ("nom",)
+    list_display = ("nom", "niveau")
+    list_filter = ("niveau",)
     search_fields = ("nom",)
 
 
@@ -57,20 +58,50 @@ class EnfantAdmin(admin.ModelAdmin):
 
 @admin.register(Menu)
 class MenuAdmin(admin.ModelAdmin):
-    list_display = ("date", "plat_principal", "prix_euros", "ferme_a")
+    list_display = (
+        "date",
+        "plat_principal",
+        "prix_maternelle_euros_affiche",
+        "prix_primaire_euros_affiche",
+        "prix_adulte_euros_affiche",
+        "prix_potage_euros_affiche",
+        "ferme_a",
+    )
     list_filter = ("date",)
     search_fields = ("plat_principal", "description")
     date_hierarchy = "date"
+    fields = (
+        "date",
+        "plat_principal",
+        "description",
+        "prix_maternelle_cents",
+        "prix_primaire_cents",
+        "prix_adulte_cents",
+        "prix_potage_cents",
+        "ferme_a",
+    )
 
-    @admin.display(description="prix (€)")
-    def prix_euros(self, obj):
-        return f"{obj.prix_euros:.2f} €"
+    @admin.display(description="mat. (€)")
+    def prix_maternelle_euros_affiche(self, obj):
+        return f"{obj.prix_maternelle_euros:.2f} €"
+
+    @admin.display(description="prim. (€)")
+    def prix_primaire_euros_affiche(self, obj):
+        return f"{obj.prix_primaire_euros:.2f} €"
+
+    @admin.display(description="adulte (€)")
+    def prix_adulte_euros_affiche(self, obj):
+        return f"{obj.prix_adulte_euros:.2f} €"
+
+    @admin.display(description="potage (€)")
+    def prix_potage_euros_affiche(self, obj):
+        return f"{obj.prix_potage_euros:.2f} €"
 
 
 @admin.register(Reservation)
 class ReservationAdmin(admin.ModelAdmin):
-    list_display = ("enfant", "menu", "statut", "date_reservation")
-    list_filter = ("statut", "menu__date", "enfant__classe")
+    list_display = ("enfant", "menu", "formule", "statut", "date_reservation")
+    list_filter = ("statut", "formule", "menu__date", "enfant__classe")
     search_fields = (
         "enfant__prenom",
         "enfant__nom",
