@@ -22,6 +22,24 @@
       </a>
     </div>
 
+    {% if idees_menus %}
+    <div class="card card-body shadow-sm mb-3 bg-light" id="idees-menus">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h6 mb-0">💡 Idées de plats</h2>
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                id="idees-autres">
+          Autres idées
+        </button>
+      </div>
+      <p class="small text-muted mb-2">
+        Cliquez sur une suggestion pour remplir le champ « Plat principal ».
+        Vous restez libre de saisir un autre plat.
+      </p>
+      <div class="d-flex flex-wrap gap-2" id="idees-liste"></div>
+      {{ idees_menus|json_script:"idees-donnees" }}
+    </div>
+    {% endif %}
+
     <form method="post" class="card card-body shadow-sm">
       {% csrf_token %}
       {{ form|crispy }}
@@ -36,4 +54,55 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if idees_menus %}
+<script>
+  // Suggestions de plats : tout se joue côté client à partir de la
+  // liste déjà filtrée (plats des 14 derniers jours exclus côté vue).
+  // « Autres idées » retire une nouvelle sélection aléatoire, sans
+  // rechargement de page ni appel réseau.
+  (function () {
+    const toutes = JSON.parse(
+      document.getElementById("idees-donnees").textContent
+    );
+    const conteneur = document.getElementById("idees-liste");
+    const champPlat = document.getElementById("id_plat_principal");
+    const NB_SUGGESTIONS = 6;
+
+    function melange(tableau) {
+      // Copie mélangée (Fisher-Yates) pour ne pas altérer l'original.
+      const copie = tableau.slice();
+      for (let i = copie.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copie[i], copie[j]] = [copie[j], copie[i]];
+      }
+      return copie;
+    }
+
+    function afficherSuggestions() {
+      conteneur.innerHTML = "";
+      melange(toutes).slice(0, NB_SUGGESTIONS).forEach(function (plat) {
+        const bouton = document.createElement("button");
+        bouton.type = "button";
+        bouton.className = "btn btn-sm btn-outline-primary";
+        bouton.textContent = plat;
+        bouton.addEventListener("click", function () {
+          if (champPlat) {
+            champPlat.value = plat;
+            champPlat.focus();
+          }
+        });
+        conteneur.appendChild(bouton);
+      });
+    }
+
+    document
+      .getElementById("idees-autres")
+      .addEventListener("click", afficherSuggestions);
+    afficherSuggestions();
+  })();
+</script>
+{% endif %}
 {% endblock %}

@@ -19,6 +19,7 @@ from django.views.decorators.http import require_POST
 
 from .decorators import cuisine_required
 from .forms import DeclarationVirementForm, InscriptionParentForm, MenuForm
+from .idees_menus import IDEES_MENUS
 from .models import Enfant, Menu, Paiement, Reservation
 
 
@@ -386,6 +387,30 @@ def cuisine_menus(request):
     )
 
 
+def idees_menus_disponibles():
+    """Retourne les idées de plats non servies ces 14 derniers jours.
+
+    On exclut de la liste statique `IDEES_MENUS` tout plat déjà utilisé
+    comme `plat_principal` dans un `Menu` daté des 14 derniers jours,
+    en comparant sans tenir compte de la casse ni des espaces de bord.
+    La liste renvoyée alimente les suggestions cliquables du formulaire
+    de création ; le tri final (aléatoire) est fait côté client en JS.
+    """
+    aujourd_hui = timezone.now().date()
+    depuis = aujourd_hui - timedelta(days=14)
+    plats_recents = {
+        (plat or "").strip().casefold()
+        for plat in Menu.objects.filter(
+            date__gte=depuis, date__lte=aujourd_hui
+        ).values_list("plat_principal", flat=True)
+    }
+    return [
+        idee
+        for idee in IDEES_MENUS
+        if idee.strip().casefold() not in plats_recents
+    ]
+
+
 @cuisine_required
 def cuisine_menu_creer(request):
     """Formulaire de création d'un menu.
@@ -416,7 +441,11 @@ def cuisine_menu_creer(request):
     return render(
         request,
         "cantine/cuisine_menu_form.html",
-        {"form": form, "menu": None},
+        {
+            "form": form,
+            "menu": None,
+            "idees_menus": idees_menus_disponibles(),
+        },
     )
 
 
