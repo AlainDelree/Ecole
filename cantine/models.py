@@ -10,12 +10,6 @@ from django.conf import settings
 from django.db import models
 
 
-# Taux de conversion euro → franc belge, gelé au 1er janvier 1999.
-# Sert uniquement à afficher un clin d'œil dans la navbar, pas à
-# faire de la vraie compta.
-TAUX_EURO_VERS_FRANC_BELGE = 40.3399
-
-
 class ProfilParent(models.Model):
     """Extension du User Django pour un compte parent.
 
@@ -54,11 +48,6 @@ class ProfilParent(models.Model):
     def solde_euros(self):
         """Solde formaté en euros (float à 2 décimales)."""
         return round(self.solde_cents / 100, 2)
-
-    @property
-    def solde_bef(self):
-        """Solde converti en francs belges — clin d'œil purement décoratif."""
-        return round((self.solde_cents / 100) * TAUX_EURO_VERS_FRANC_BELGE, 2)
 
 
 class Classe(models.Model):

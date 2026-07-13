@@ -29,7 +29,7 @@ class ProfilParentAdmin(admin.ModelAdmin):
         "utilisateur__last_name",
         "telephone",
     )
-    readonly_fields = ("solde_euros", "solde_bef")
+    readonly_fields = ("solde_euros",)
 
     @admin.display(description="solde (€)")
     def solde_euros(self, obj):

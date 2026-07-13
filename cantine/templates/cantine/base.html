@@ -50,7 +50,7 @@
         {% with profil=user.profil_parent %}
         <li class="nav-item me-lg-3">
           <span class="badge bg-light text-primary badge-solde"
-                title="Solde disponible ({{ profil.solde_bef|floatformat:2 }} BEF pour info)">
+                title="Solde disponible">
             Solde : {{ profil.solde_euros|floatformat:2 }} €
           </span>
         </li>

@@ -11,9 +11,6 @@
       <div class="card-body">
         <h5 class="card-title">Votre solde</h5>
         <p class="display-6 mb-0">{{ profil.solde_euros|floatformat:2 }} €</p>
-        <p class="text-muted small mt-1 mb-0">
-          soit {{ profil.solde_bef|floatformat:2 }} francs belges (clin d'œil).
-        </p>
         <a class="btn btn-primary mt-3"
            href="{% url 'cantine:declarer_virement' %}">
           Déclarer un virement
