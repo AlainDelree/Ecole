@@ -88,6 +88,26 @@ Ecole/
     management/commands/peupler_demo.py
 ```
 
+## Suggestions de menus (générateur combinatoire)
+
+Le formulaire de création de menu (`/cuisine/menus/creer/`) propose des
+idées de plats **générées à la volée** par `cantine/generateur_menus.py`,
+plutôt qu'une liste figée. Chaque suggestion combine quatre briques —
+protéine + féculent + légume + sauce/accompagnement — ce qui garantit un
+plat équilibré, sans porc dans les protéines ni alcool dans les sauces.
+
+Nombre de combinaisons possibles (produit des tailles de listes) :
+
+- Toutes protéines : **19 × 10 × 14 × 10 = 26 600** combinaisons.
+- Végétariennes uniquement : **8 × 10 × 14 × 10 = 11 200** combinaisons.
+
+On dépasse donc très largement l'objectif de 1000 suggestions distinctes.
+Une case « Suggestions végétariennes uniquement » sur le formulaire limite
+l'affichage aux combinaisons végétariennes. Tout est calculé localement,
+sans dépendance externe ni appel réseau. La liste statique historique
+(`cantine/idees_menus.py`) est conservée à titre de référence mais n'est
+plus la source des suggestions.
+
 ## Prochaines étapes (issues à venir)
 
 - Interfaces dédiées cuisine / enseignants / cuisinière

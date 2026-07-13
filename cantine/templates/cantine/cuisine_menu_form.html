@@ -32,11 +32,20 @@
         </button>
       </div>
       <p class="small text-muted mb-2">
-        Cliquez sur une suggestion pour remplir le champ « Plat principal ».
+        Suggestions générées automatiquement (protéine + féculent + légume
+        + sauce). Cliquez-en une pour remplir le champ « Plat principal ».
         Vous restez libre de saisir un autre plat.
       </p>
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox"
+               id="idees-vego-seulement">
+        <label class="form-check-label small" for="idees-vego-seulement">
+          Suggestions végétariennes uniquement
+        </label>
+      </div>
       <div class="d-flex flex-wrap gap-2" id="idees-liste"></div>
       {{ idees_menus|json_script:"idees-donnees" }}
+      {{ idees_menus_vego|json_script:"idees-donnees-vego" }}
     </div>
     {% endif %}
 
@@ -59,17 +68,26 @@
 {% block extra_js %}
 {% if idees_menus %}
 <script>
-  // Suggestions de plats : tout se joue côté client à partir de la
-  // liste déjà filtrée (plats des 14 derniers jours exclus côté vue).
-  // « Autres idées » retire une nouvelle sélection aléatoire, sans
-  // rechargement de page ni appel réseau.
+  // Suggestions de plats : tout se joue côté client à partir des deux
+  // pools déjà générés côté vue (combinatoire, plats des 14 derniers
+  // jours exclus). La case « végétariennes uniquement » bascule d'un
+  // pool à l'autre ; « Autres idées » retire une nouvelle sélection
+  // aléatoire. Aucun rechargement de page ni appel réseau.
   (function () {
-    const toutes = JSON.parse(
+    const poolMixte = JSON.parse(
       document.getElementById("idees-donnees").textContent
+    );
+    const poolVego = JSON.parse(
+      document.getElementById("idees-donnees-vego").textContent
     );
     const conteneur = document.getElementById("idees-liste");
     const champPlat = document.getElementById("id_plat_principal");
+    const caseVego = document.getElementById("idees-vego-seulement");
     const NB_SUGGESTIONS = 6;
+
+    function poolCourant() {
+      return caseVego && caseVego.checked ? poolVego : poolMixte;
+    }
 
     function melange(tableau) {
       // Copie mélangée (Fisher-Yates) pour ne pas altérer l'original.
@@ -83,7 +101,7 @@
 
     function afficherSuggestions() {
       conteneur.innerHTML = "";
-      melange(toutes).slice(0, NB_SUGGESTIONS).forEach(function (plat) {
+      melange(poolCourant()).slice(0, NB_SUGGESTIONS).forEach(function (plat) {
         const bouton = document.createElement("button");
         bouton.type = "button";
         bouton.className = "btn btn-sm btn-outline-primary";
@@ -101,6 +119,9 @@
     document
       .getElementById("idees-autres")
       .addEventListener("click", afficherSuggestions);
+    if (caseVego) {
+      caseVego.addEventListener("change", afficherSuggestions);
+    }
     afficherSuggestions();
   })();
 </script>

@@ -19,8 +19,15 @@ from django.views.decorators.http import require_POST
 
 from .decorators import cuisine_required
 from .forms import DeclarationVirementForm, InscriptionParentForm, MenuForm
-from .idees_menus import IDEES_MENUS
+from .generateur_menus import generer_suggestions
 from .models import Enfant, Menu, Paiement, Reservation
+
+
+# Nombre de suggestions générées par pool (mixte / végétarien) et
+# proposées au formulaire de création de menu. Le pool est volontairement
+# plus large que les 6 boutons affichés pour que « Autres idées » offre
+# du renouvellement sans rechargement de page.
+NB_SUGGESTIONS_POOL = 30
 
 
 # Statuts « à préparer/servir » : tout ce qui n'est ni annulé ni en
@@ -387,28 +394,44 @@ def cuisine_menus(request):
     )
 
 
-def idees_menus_disponibles():
-    """Retourne les idées de plats non servies ces 14 derniers jours.
+def _plats_recents():
+    """Plats servis ces 14 derniers jours (noms normalisés).
 
-    On exclut de la liste statique `IDEES_MENUS` tout plat déjà utilisé
-    comme `plat_principal` dans un `Menu` daté des 14 derniers jours,
-    en comparant sans tenir compte de la casse ni des espaces de bord.
-    La liste renvoyée alimente les suggestions cliquables du formulaire
-    de création ; le tri final (aléatoire) est fait côté client en JS.
+    Sert à écarter des suggestions toute combinaison déjà utilisée comme
+    `plat_principal` d'un `Menu` récent, sans tenir compte de la casse ni
+    des espaces de bord.
     """
     aujourd_hui = timezone.now().date()
     depuis = aujourd_hui - timedelta(days=14)
-    plats_recents = {
+    return {
         (plat or "").strip().casefold()
         for plat in Menu.objects.filter(
             date__gte=depuis, date__lte=aujourd_hui
         ).values_list("plat_principal", flat=True)
     }
-    return [
-        idee
-        for idee in IDEES_MENUS
-        if idee.strip().casefold() not in plats_recents
-    ]
+
+
+def suggestions_menus():
+    """Deux pools de suggestions pour le formulaire de création.
+
+    Le générateur combinatoire (`cantine.generateur_menus`) compose des
+    plats équilibrés à la volée (plusieurs milliers de combinaisons
+    possibles), en écartant les plats servis ces 14 derniers jours.
+    On renvoie deux listes : l'une mixte, l'autre végétarienne, pour que
+    le filtre « végétariennes uniquement » du formulaire bascule d'un
+    pool à l'autre côté client, sans rechargement ni appel réseau.
+    """
+    recents = _plats_recents()
+    return {
+        "mixte": generer_suggestions(
+            NB_SUGGESTIONS_POOL, exclure_recents=recents
+        ),
+        "vegetarien": generer_suggestions(
+            NB_SUGGESTIONS_POOL,
+            vegetarien_uniquement=True,
+            exclure_recents=recents,
+        ),
+    }
 
 
 @cuisine_required
@@ -438,13 +461,15 @@ def cuisine_menu_creer(request):
     else:
         form = MenuForm(initial=initial)
 
+    pools = suggestions_menus()
     return render(
         request,
         "cantine/cuisine_menu_form.html",
         {
             "form": form,
             "menu": None,
-            "idees_menus": idees_menus_disponibles(),
+            "idees_menus": pools["mixte"],
+            "idees_menus_vego": pools["vegetarien"],
         },
     )
 
