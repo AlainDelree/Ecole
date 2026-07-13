@@ -16,6 +16,9 @@ NOM_GROUPE_CUISINE = "Cuisine"
 NOM_GROUPE_COMPTABILITE = "Comptabilite"
 
 
+# Prix de référence : chaque tuple donne le prix primaire (repas
+# complet, en centimes) ; les prix maternelle / adulte / potage sont
+# dérivés par _prix_menu_demo pour rester cohérents entre menus.
 PLATS_DEMO = [
     ("Spaghetti bolognaise", "Salade verte, parmesan", 550),
     ("Poulet rôti, purée", "Petits pois, jus", 600),
@@ -30,6 +33,21 @@ PLATS_DEMO = [
 ]
 
 
+def _prix_menu_demo(prix_primaire_cents):
+    """Dérive les 4 prix d'un menu à partir du prix primaire.
+
+    - Maternelle : -50 centimes (moins cher, portions plus petites).
+    - Adulte : +50 % (personnel/enseignants).
+    - Potage seul : moitié du prix primaire.
+    """
+    return {
+        "prix_maternelle_cents": max(0, prix_primaire_cents - 50),
+        "prix_primaire_cents": prix_primaire_cents,
+        "prix_adulte_cents": round(prix_primaire_cents * 1.5),
+        "prix_potage_cents": round(prix_primaire_cents / 2),
+    }
+
+
 class Command(BaseCommand):
     help = "Crée des classes, enfants, parents et menus de démonstration."
 
@@ -37,13 +55,28 @@ class Command(BaseCommand):
         self.stdout.write("Création des données de démo…")
 
         # --- Classes -----------------------------------------------------
-        noms_classes = ["1re primaire A", "3e primaire A", "5e primaire B"]
+        # Mix cohérent maternelle / primaire pour tester les tarifs
+        # différenciés (au moins une classe de chaque niveau).
+        classes_config = [
+            ("Maternelle A", Classe.NIVEAU_MATERNELLE),
+            ("1re primaire A", Classe.NIVEAU_PRIMAIRE),
+            ("3e primaire A", Classe.NIVEAU_PRIMAIRE),
+            ("5e primaire B", Classe.NIVEAU_PRIMAIRE),
+        ]
         classes = []
-        for nom in noms_classes:
-            classe, cree = Classe.objects.get_or_create(nom=nom)
+        for nom, niveau in classes_config:
+            classe, cree = Classe.objects.get_or_create(
+                nom=nom,
+                defaults={"niveau": niveau},
+            )
+            # Rétro-compat : si la classe existait avant l'ajout du champ
+            # niveau, on la met à jour ici.
+            if classe.niveau != niveau:
+                classe.niveau = niveau
+                classe.save(update_fields=["niveau"])
             classes.append(classe)
             if cree:
-                self.stdout.write(f"  + Classe : {classe.nom}")
+                self.stdout.write(f"  + Classe : {classe.nom} ({niveau})")
 
         # --- Parents (Users + ProfilParents créés via signal) ------------
         parents_config = [
@@ -86,12 +119,15 @@ class Command(BaseCommand):
             parents.append(profil)
 
         # --- Enfants -----------------------------------------------------
+        # classes[0] = maternelle, classes[1..3] = primaire.
+        # On garde au moins un enfant en maternelle et plusieurs en
+        # primaire pour tester les prix différenciés en démo.
         enfants_config = [
-            ("Lucie", "Dupont", classes[0], parents[0]),
-            ("Tom", "Dupont", classes[1], parents[0]),
-            ("Emma", "Lemoine", classes[1], parents[1]),
-            ("Noah", "Lemoine", classes[2], parents[1]),
-            ("Léa", "Lemoine", classes[0], parents[1]),
+            ("Lucie", "Dupont", classes[0], parents[0]),   # maternelle
+            ("Tom", "Dupont", classes[2], parents[0]),     # primaire
+            ("Emma", "Lemoine", classes[2], parents[1]),   # primaire
+            ("Noah", "Lemoine", classes[3], parents[1]),   # primaire
+            ("Léa", "Lemoine", classes[1], parents[1]),    # primaire
         ]
         for prenom, nom, classe, parent in enfants_config:
             _, cree = Enfant.objects.get_or_create(
@@ -116,14 +152,15 @@ class Command(BaseCommand):
             plat, description, prix = PLATS_DEMO[crees % len(PLATS_DEMO)]
             # Clôture des réservations à 9h le matin même.
             ferme_a = timezone.make_aware(datetime.combine(jour, time(9, 0)), tz)
+            defaults = {
+                "plat_principal": plat,
+                "description": description,
+                "ferme_a": ferme_a,
+                **_prix_menu_demo(prix),
+            }
             _, cree = Menu.objects.get_or_create(
                 date=jour,
-                defaults={
-                    "plat_principal": plat,
-                    "description": description,
-                    "prix_cents": prix,
-                    "ferme_a": ferme_a,
-                },
+                defaults=defaults,
             )
             if cree:
                 crees += 1
