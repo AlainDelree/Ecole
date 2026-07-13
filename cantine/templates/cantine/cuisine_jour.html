@@ -67,8 +67,15 @@
                   <tbody>
                   {% for resa in reservations %}
                     <tr>
-                      <td>{{ resa.enfant.prenom }} {{ resa.enfant.nom }}</td>
-                      <td>{{ resa.enfant.classe }}</td>
+                      <td>
+                        {{ resa.prenom }} {{ resa.nom }}
+                        {% if resa.solde_suffisant %}
+                          <span class="badge bg-success ms-1">Solde OK</span>
+                        {% else %}
+                          <span class="badge bg-danger ms-1">Solde insuffisant</span>
+                        {% endif %}
+                      </td>
+                      <td>{{ resa.classe }}</td>
                       <td>
                         {% if resa.statut == 'mangee' %}
                           <span class="badge bg-success">A mangé</span>
@@ -76,7 +83,7 @@
                           <span class="badge bg-primary">Présent</span>
                         {% else %}
                           <span class="badge bg-secondary">
-                            {{ resa.get_statut_display }}
+                            {{ resa.statut_display }}
                           </span>
                         {% endif %}
                       </td>

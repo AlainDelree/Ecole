@@ -333,13 +333,31 @@ def cuisine_jour(request, date):
                 menu=menu,
                 statut__in=STATUTS_A_PREPARER,
             )
-            .select_related("enfant", "enfant__classe")
+            .select_related("enfant", "enfant__classe", "enfant__parent")
             .order_by("enfant__nom", "enfant__prenom")
         )
         groupes = {}
         for resa in reservations:
             cle = (resa.enfant.allergies or "").strip()
-            groupes.setdefault(cle, []).append(resa)
+            # On ne transmet au template qu'un booléen : le solde du
+            # parent couvre-t-il le prix du repas ? Le montant exact du
+            # solde (solde_cents) ne quitte jamais la vue — la cuisinière
+            # n'a pas à connaître l'information financière détaillée.
+            # On expose des champs scalaires plutôt que l'objet Enfant
+            # (qui embarque parent.solde_cents via le select_related), afin
+            # qu'aucune valeur de solde ne transite dans le contexte.
+            resa_affichage = {
+                "id": resa.id,
+                "statut": resa.statut,
+                "statut_display": resa.get_statut_display(),
+                "prenom": resa.enfant.prenom,
+                "nom": resa.enfant.nom,
+                "classe": str(resa.enfant.classe),
+                "solde_suffisant": (
+                    resa.enfant.parent.solde_cents >= menu.prix_cents
+                ),
+            }
+            groupes.setdefault(cle, []).append(resa_affichage)
         # Trie : "sans allergie" d'abord, puis par texte d'allergie.
         groupes_ordonnes = sorted(
             groupes.items(), key=lambda kv: (kv[0] != "", kv[0].lower())
