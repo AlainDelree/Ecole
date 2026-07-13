@@ -1,0 +1,72 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Calendrier — Cantine{% endblock %}
+
+{% block content %}
+<h1 class="mb-3">Calendrier des menus (30 prochains jours)</h1>
+
+{% if not enfants %}
+  <div class="alert alert-warning">
+    Aucun enfant n'est rattaché à votre compte : la réservation est
+    impossible tant que le secrétariat ne les a pas ajoutés.
+  </div>
+{% endif %}
+
+{% if lignes %}
+  {% for ligne in lignes %}
+    <div class="card mb-3 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h5 class="mb-1">
+              {{ ligne.menu.date|date:"l d/m/Y"|capfirst }}
+              — {{ ligne.menu.plat_principal }}
+            </h5>
+            {% if ligne.menu.description %}
+              <p class="text-muted mb-2">{{ ligne.menu.description }}</p>
+            {% endif %}
+            <p class="mb-2">
+              <strong>{{ ligne.menu.prix_euros|floatformat:2 }} €</strong>
+              &middot; clôture le {{ ligne.menu.ferme_a|date:"d/m/Y H:i" }}
+            </p>
+          </div>
+          {% if ligne.cloture_passee %}
+            <span class="badge bg-secondary">Réservations closes</span>
+          {% endif %}
+        </div>
+
+        {% if enfants %}
+        <ul class="list-group list-group-flush">
+          {% for etat in ligne.etats_enfants %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>
+                {{ etat.enfant.prenom }} {{ etat.enfant.nom }}
+                <span class="text-muted">({{ etat.enfant.classe }})</span>
+              </span>
+              {% if etat.reservation %}
+                <span class="badge bg-info text-dark">
+                  {{ etat.reservation.get_statut_display }}
+                </span>
+              {% elif ligne.cloture_passee %}
+                <span class="text-muted small">Trop tard</span>
+              {% else %}
+                <form action="{% url 'cantine:reserver_menu' %}" method="post" class="m-0">
+                  {% csrf_token %}
+                  <input type="hidden" name="enfant_id" value="{{ etat.enfant.id }}">
+                  <input type="hidden" name="menu_id" value="{{ ligne.menu.id }}">
+                  <button type="submit" class="btn btn-sm btn-outline-primary">
+                    Réserver
+                  </button>
+                </form>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="text-muted">Aucun menu n'est encore programmé pour les 30 prochains jours.</p>
+{% endif %}
+{% endblock %}

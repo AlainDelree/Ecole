@@ -1,0 +1,79 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Accueil — Cantine{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Bonjour {{ user.first_name|default:user.username }} 👋</h1>
+
+<div class="row g-4">
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title">Votre solde</h5>
+        <p class="display-6 mb-0">{{ profil.solde_euros|floatformat:2 }} €</p>
+        <p class="text-muted small mt-1 mb-0">
+          soit {{ profil.solde_bef|floatformat:2 }} francs belges (clin d'œil).
+        </p>
+        <a class="btn btn-primary mt-3"
+           href="{% url 'cantine:declarer_virement' %}">
+          Déclarer un virement
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title">Vos enfants</h5>
+        {% if enfants %}
+          <ul class="list-group list-group-flush">
+            {% for enfant in enfants %}
+              <li class="list-group-item d-flex justify-content-between">
+                <span>{{ enfant.prenom }} {{ enfant.nom }}</span>
+                <span class="text-muted">{{ enfant.classe }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-muted mb-0">
+            Aucun enfant n'est encore rattaché à votre compte. Contactez le
+            secrétariat de l'école pour l'ajout.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="mt-5 mb-3">Prochaines réservations</h2>
+{% if prochaines_reservations %}
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Enfant</th>
+          <th>Menu</th>
+          <th>Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in prochaines_reservations %}
+        <tr>
+          <td>{{ r.menu.date|date:"d/m/Y" }}</td>
+          <td>{{ r.enfant.prenom }} {{ r.enfant.nom }}</td>
+          <td>{{ r.menu.plat_principal }}</td>
+          <td><span class="badge bg-secondary">{{ r.get_statut_display }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted">
+    Aucune réservation à venir.
+    <a href="{% url 'cantine:calendrier' %}">Voir le calendrier des menus</a>.
+  </p>
+{% endif %}
+{% endblock %}

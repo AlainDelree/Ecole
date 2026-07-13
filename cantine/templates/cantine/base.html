@@ -1,0 +1,106 @@
+{% load crispy_forms_tags %}<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Cantine — École{% endblock %}</title>
+
+  {# Bootstrap 5 via CDN, pas de build local. #}
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+    crossorigin="anonymous">
+  <style>
+    /* Petites touches maison ; le gros du style vient de Bootstrap. */
+    body { padding-top: 4.5rem; }
+    .badge-solde { font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+  <div class="container">
+    <a class="navbar-brand" href="{% url 'cantine:accueil' %}">
+      🍽️ Cantine
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+            data-bs-target="#nav-principal" aria-controls="nav-principal"
+            aria-expanded="false" aria-label="Basculer la navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="nav-principal">
+      {% if user.is_authenticated %}
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'cantine:accueil' %}">Accueil</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'cantine:calendrier' %}">Calendrier</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'cantine:historique' %}">Historique</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'cantine:declarer_virement' %}">Déclarer un virement</a>
+        </li>
+      </ul>
+      <ul class="navbar-nav ms-auto align-items-lg-center">
+        {% with profil=user.profil_parent %}
+        <li class="nav-item me-lg-3">
+          <span class="badge bg-light text-primary badge-solde"
+                title="Solde disponible ({{ profil.solde_bef|floatformat:2 }} BEF pour info)">
+            Solde : {{ profil.solde_euros|floatformat:2 }} €
+          </span>
+        </li>
+        {% endwith %}
+        <li class="nav-item">
+          <form action="{% url 'cantine:deconnexion' %}" method="post" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-light">
+              Se déconnecter
+            </button>
+          </form>
+        </li>
+      </ul>
+      {% else %}
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'cantine:connexion' %}">Se connecter</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'cantine:inscription' %}">Créer un compte</a>
+        </li>
+      </ul>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fermer"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="container mt-5 mb-4 text-muted small">
+  <hr>
+  Cantine scolaire — premier jet {{ 2026 }}. Paiements par virement,
+  gérés par la comptabilité de l'école.
+</footer>
+
+<script
+  src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+  crossorigin="anonymous"></script>
+
+</body>
+</html>

@@ -1,0 +1,218 @@
+"""Vues de l'app cantine (espace parents).
+
+Toutes les vues « métier » sont protégées par @login_required : un
+parent doit être connecté pour voir ses enfants, réserver, etc. La
+racine `/` redirige selon l'état d'authentification.
+"""
+
+from datetime import timedelta
+
+from django.contrib import messages
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+
+from .forms import DeclarationVirementForm, InscriptionParentForm
+from .models import Enfant, Menu, Paiement, Reservation
+
+
+def racine(request):
+    """Aiguillage : accueil si connecté, page de connexion sinon."""
+    if request.user.is_authenticated:
+        return redirect("cantine:accueil")
+    return redirect("cantine:connexion")
+
+
+def inscription(request):
+    """Création d'un compte parent (ProfilParent créé par signal)."""
+    if request.user.is_authenticated:
+        return redirect("cantine:accueil")
+
+    if request.method == "POST":
+        form = InscriptionParentForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            messages.success(
+                request,
+                "Bienvenue ! Ton compte est créé, ajoute tes enfants "
+                "via l'école ou l'administration.",
+            )
+            return redirect("cantine:accueil")
+    else:
+        form = InscriptionParentForm()
+
+    return render(request, "cantine/inscription.html", {"form": form})
+
+
+@login_required
+def accueil(request):
+    """Tableau de bord parent : solde, enfants, prochaines réservations."""
+    profil = request.user.profil_parent
+    enfants = profil.enfants.select_related("classe").all()
+
+    aujourd_hui = timezone.now().date()
+    prochaines_reservations = (
+        Reservation.objects.filter(
+            enfant__parent=profil,
+            menu__date__gte=aujourd_hui,
+        )
+        .select_related("enfant", "menu")
+        .order_by("menu__date")[:10]
+    )
+
+    return render(
+        request,
+        "cantine/accueil.html",
+        {
+            "profil": profil,
+            "enfants": enfants,
+            "prochaines_reservations": prochaines_reservations,
+        },
+    )
+
+
+@login_required
+def calendrier(request):
+    """Menus des 30 prochains jours avec bouton « Réserver » par enfant."""
+    profil = request.user.profil_parent
+    enfants = list(profil.enfants.select_related("classe"))
+
+    aujourd_hui = timezone.now().date()
+    limite = aujourd_hui + timedelta(days=30)
+    menus = Menu.objects.filter(
+        date__gte=aujourd_hui, date__lte=limite
+    ).order_by("date")
+
+    # Pré-charge les réservations existantes du parent sur cette
+    # période pour éviter N+1 requêtes dans le template.
+    reservations_existantes = Reservation.objects.filter(
+        enfant__parent=profil,
+        menu__in=menus,
+    ).select_related("enfant", "menu")
+    index_resa = {
+        (r.enfant_id, r.menu_id): r for r in reservations_existantes
+    }
+
+    maintenant = timezone.now()
+
+    # Assemble une structure prête à parcourir dans le template :
+    # pour chaque menu, la liste (enfant, reservation_ou_none).
+    lignes = []
+    for menu in menus:
+        etats_enfants = []
+        for enfant in enfants:
+            resa = index_resa.get((enfant.id, menu.id))
+            etats_enfants.append({"enfant": enfant, "reservation": resa})
+        lignes.append(
+            {
+                "menu": menu,
+                "cloture_passee": menu.ferme_a <= maintenant,
+                "etats_enfants": etats_enfants,
+            }
+        )
+
+    return render(
+        request,
+        "cantine/calendrier.html",
+        {
+            "lignes": lignes,
+            "enfants": enfants,
+        },
+    )
+
+
+@login_required
+@require_POST
+def reserver_menu(request):
+    """Crée une réservation en_attente_paiement pour (enfant, menu)."""
+    profil = request.user.profil_parent
+    enfant_id = request.POST.get("enfant_id")
+    menu_id = request.POST.get("menu_id")
+
+    enfant = get_object_or_404(Enfant, pk=enfant_id, parent=profil)
+    menu = get_object_or_404(Menu, pk=menu_id)
+
+    if menu.ferme_a <= timezone.now():
+        messages.error(
+            request, "Trop tard : les réservations pour ce menu sont closes."
+        )
+        return HttpResponseRedirect(reverse("cantine:calendrier"))
+
+    _, cree = Reservation.objects.get_or_create(
+        enfant=enfant,
+        menu=menu,
+        defaults={"statut": Reservation.STATUT_EN_ATTENTE},
+    )
+    if cree:
+        messages.success(
+            request,
+            f"Réservation enregistrée pour {enfant.prenom} le "
+            f"{menu.date:%d/%m/%Y}. Elle sera confirmée dès validation "
+            "du paiement.",
+        )
+    else:
+        messages.info(
+            request,
+            f"Une réservation existait déjà pour {enfant.prenom} le "
+            f"{menu.date:%d/%m/%Y}.",
+        )
+    return HttpResponseRedirect(reverse("cantine:calendrier"))
+
+
+@login_required
+def historique(request):
+    """Historique : réservations passées + paiements déclarés/validés."""
+    profil = request.user.profil_parent
+    aujourd_hui = timezone.now().date()
+
+    reservations_passees = (
+        Reservation.objects.filter(
+            enfant__parent=profil,
+            menu__date__lt=aujourd_hui,
+        )
+        .select_related("enfant", "menu")
+        .order_by("-menu__date")
+    )
+    paiements = profil.paiements.all().order_by("-date_declaration")
+
+    return render(
+        request,
+        "cantine/historique.html",
+        {
+            "reservations_passees": reservations_passees,
+            "paiements": paiements,
+        },
+    )
+
+
+@login_required
+def declarer_virement(request):
+    """Formulaire de déclaration d'un virement (statut = declare)."""
+    profil = request.user.profil_parent
+
+    if request.method == "POST":
+        form = DeclarationVirementForm(request.POST)
+        if form.is_valid():
+            Paiement.objects.create(
+                parent=profil,
+                montant_cents=form.montant_cents(),
+                reference_virement=form.cleaned_data["reference_virement"],
+            )
+            messages.success(
+                request,
+                "Virement déclaré. La comptabilité le validera dès réception.",
+            )
+            return redirect("cantine:historique")
+    else:
+        form = DeclarationVirementForm()
+
+    return render(
+        request,
+        "cantine/declarer_virement.html",
+        {"form": form},
+    )

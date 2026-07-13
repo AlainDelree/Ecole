@@ -1,0 +1,76 @@
+{% extends "cantine/base.html" %}
+
+{% block title %}Historique — Cantine{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Historique</h1>
+
+<h2 class="h4 mt-4">Réservations passées</h2>
+{% if reservations_passees %}
+  <div class="table-responsive">
+    <table class="table table-sm table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Enfant</th>
+          <th>Menu</th>
+          <th>Statut final</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reservations_passees %}
+          <tr>
+            <td>{{ r.menu.date|date:"d/m/Y" }}</td>
+            <td>{{ r.enfant.prenom }} {{ r.enfant.nom }}</td>
+            <td>{{ r.menu.plat_principal }}</td>
+            <td>{{ r.get_statut_display }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted">Aucune réservation passée à afficher.</p>
+{% endif %}
+
+<h2 class="h4 mt-5">Vos virements déclarés</h2>
+{% if paiements %}
+  <div class="table-responsive">
+    <table class="table table-sm table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Déclaré le</th>
+          <th>Montant</th>
+          <th>Référence</th>
+          <th>Statut</th>
+          <th>Validé le</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in paiements %}
+          <tr>
+            <td>{{ p.date_declaration|date:"d/m/Y H:i" }}</td>
+            <td>{{ p.montant_euros|floatformat:2 }} €</td>
+            <td>{{ p.reference_virement }}</td>
+            <td>
+              {% if p.statut == "valide" %}
+                <span class="badge bg-success">{{ p.get_statut_display }}</span>
+              {% elif p.statut == "rejete" %}
+                <span class="badge bg-danger">{{ p.get_statut_display }}</span>
+              {% else %}
+                <span class="badge bg-secondary">{{ p.get_statut_display }}</span>
+              {% endif %}
+            </td>
+            <td>{{ p.date_validation|date:"d/m/Y H:i"|default:"—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted">
+    Aucun virement déclaré pour l'instant.
+    <a href="{% url 'cantine:declarer_virement' %}">En déclarer un</a>.
+  </p>
+{% endif %}
+{% endblock %}

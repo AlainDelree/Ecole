@@ -1,0 +1,25 @@
+{% extends "cantine/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Déclarer un virement — Cantine{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <h1 class="mb-3">Déclarer un virement</h1>
+    <p class="text-muted">
+      Effectuez le virement sur le compte de l'école, puis renseignez
+      ci-dessous le montant et la référence pour que la comptabilité
+      puisse le rattacher à votre compte.
+    </p>
+
+    <form method="post" class="card card-body shadow-sm">
+      {% csrf_token %}
+      {{ form|crispy }}
+      <button type="submit" class="btn btn-primary mt-2">
+        Enregistrer la déclaration
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
