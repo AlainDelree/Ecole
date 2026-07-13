@@ -183,6 +183,26 @@ class Reservation(models.Model):
     def __str__(self):
         return f"{self.enfant} — {self.menu} ({self.get_statut_display()})"
 
+    def marquer_mangee(self):
+        """Passe la réservation à `mangee` et décompte le solde du parent.
+
+        Idempotent : si la réservation est déjà `mangee`, on ne
+        redécrémente pas le solde et on renvoie False (protection
+        contre les doubles clics dans la vue cuisinière). Même patron
+        que `Paiement.valider()` : mise à jour atomique via une
+        expression F pour éviter les race conditions.
+        """
+        if self.statut == self.STATUT_MANGEE:
+            return False
+
+        self.statut = self.STATUT_MANGEE
+        self.save(update_fields=["statut"])
+
+        ProfilParent.objects.filter(pk=self.enfant.parent_id).update(
+            solde_cents=models.F("solde_cents") - self.menu.prix_cents
+        )
+        return True
+
 
 class Paiement(models.Model):
     """Virement déclaré par un parent (validé ensuite par la compta).
