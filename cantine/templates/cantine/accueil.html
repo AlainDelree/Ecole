@@ -6,20 +6,7 @@
 <h1 class="mb-4">Bonjour {{ user.first_name|default:user.username }} 👋</h1>
 
 <div class="row g-4">
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h5 class="card-title">Votre solde</h5>
-        <p class="display-6 mb-0">{{ profil.solde_euros|floatformat:2 }} €</p>
-        <a class="btn btn-primary mt-3"
-           href="{% url 'cantine:declarer_virement' %}">
-          Déclarer un virement
-        </a>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-8">
+  <div class="col-md-12">
     <div class="card shadow-sm h-100">
       <div class="card-body">
         <h5 class="card-title">Vos enfants</h5>
@@ -38,6 +25,10 @@
             secrétariat de l'école pour l'ajout.
           </p>
         {% endif %}
+        <a class="btn btn-primary mt-3"
+           href="{% url 'cantine:calendrier' %}">
+          Réserver des repas
+        </a>
       </div>
     </div>
   </div>

@@ -59,26 +59,6 @@ class InscriptionParentForm(UserCreationForm):
         return user
 
 
-class DeclarationVirementForm(forms.Form):
-    """Formulaire de déclaration d'un virement par le parent."""
-
-    montant_euros = forms.DecimalField(
-        label="Montant (€)",
-        min_value=0.01,
-        decimal_places=2,
-        help_text="Montant exact du virement effectué.",
-    )
-    reference_virement = forms.CharField(
-        label="Référence du virement",
-        max_length=100,
-        help_text="Communication indiquée sur votre virement (libre ou structurée).",
-    )
-
-    def montant_cents(self) -> int:
-        """Convertit le montant saisi en centimes (int)."""
-        return int(round(self.cleaned_data["montant_euros"] * 100))
-
-
 class MenuForm(forms.ModelForm):
     """ModelForm de gestion des menus par la cuisinière.
 

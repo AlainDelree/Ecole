@@ -42,9 +42,6 @@
         <li class="nav-item">
           <a class="nav-link" href="{% url 'cantine:historique' %}">Historique</a>
         </li>
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'cantine:declarer_virement' %}">Déclarer un virement</a>
-        </li>
         {# Liens supplémentaires réservés aux groupes métier. #}
         {% for g in user.groups.all %}
           {% if g.name == "Cuisine" %}
@@ -57,9 +54,6 @@
           {% endif %}
           {% if g.name == "Comptabilite" %}
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'cantine:comptabilite_paiements' %}">Comptabilité — Paiements</a>
-            </li>
-            <li class="nav-item">
               <a class="nav-link" href="{% url 'cantine:comptabilite_suivi_enfants' %}">Comptabilité — Suivi enfants</a>
             </li>
           {% endif %}
@@ -67,13 +61,12 @@
       </ul>
       <ul class="navbar-nav ms-auto align-items-lg-center">
         {% comment %}
-          Le solde ne s'affiche que pour les vrais parents : un
+          Le bouton Panier est réservé aux vrais parents : un
           utilisateur staff (groupe Cuisine, etc.) n'a pas de
-          ProfilParent et faire .solde_euros dessus lèverait une
-          exception à la connexion.
+          ProfilParent.
         {% endcomment %}
         {% if user.profil_parent %}
-        <li class="nav-item me-lg-2">
+        <li class="nav-item me-lg-3">
           <a class="btn btn-sm btn-outline-light position-relative"
              href="{% url 'cantine:panier_afficher' %}"
              title="Voir mon panier">
@@ -82,12 +75,6 @@
               <span class="badge bg-warning text-dark ms-1">{{ panier_nb_articles }}</span>
             {% endif %}
           </a>
-        </li>
-        <li class="nav-item me-lg-3">
-          <span class="badge bg-light text-primary badge-solde"
-                title="Solde disponible">
-            Solde : {{ user.profil_parent.solde_euros|floatformat:2 }} €
-          </span>
         </li>
         {% endif %}
         <li class="nav-item">
@@ -128,8 +115,8 @@
 
 <footer class="container mt-5 mb-4 text-muted small">
   <hr>
-  Cantine scolaire — premier jet {{ 2026 }}. Paiements par virement,
-  gérés par la comptabilité de l'école.
+  Cantine scolaire — premier jet {{ 2026 }}. Paiements simulés
+  (intégration Mollie prévue prochainement).
 </footer>
 
 <script

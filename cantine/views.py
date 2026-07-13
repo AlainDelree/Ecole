@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -20,9 +20,9 @@ from django.views.decorators.http import require_POST
 
 from . import panier as panier_session
 from .decorators import comptabilite_required, cuisine_required
-from .forms import DeclarationVirementForm, InscriptionParentForm, MenuForm
+from .forms import InscriptionParentForm, MenuForm
 from .generateur_menus import generer_suggestions
-from .models import Classe, Enfant, Menu, Paiement, ProfilParent, Reservation
+from .models import Classe, Enfant, Menu, Reservation
 
 
 # Nombre de suggestions générées par pool (mixte / végétarien) et
@@ -49,7 +49,7 @@ def racine(request):
 
 
 def inscription(request):
-    """Création d'un compte parent (ProfilParent créé par signal)."""
+    """Création d'un compte parent (profil parent créé par signal)."""
     if request.user.is_authenticated:
         return redirect("cantine:accueil")
 
@@ -223,7 +223,7 @@ def panier_ajouter(request):
 
 @login_required
 def panier_afficher(request):
-    """Affiche le contenu du panier avec total et disponibilité du solde."""
+    """Affiche le contenu du panier avec son total à payer."""
     profil = request.user.profil_parent
     lignes, perdues = panier_session.lignes_hydratees(request.session, profil)
     if perdues:
@@ -234,17 +234,12 @@ def panier_afficher(request):
             "(menu clôturé ou déjà réservé) et ont été retirés.",
         )
     total_cents = sum(ligne["prix_cents"] for ligne in lignes)
-    solde_cents = profil.solde_cents
-    manque_cents = max(0, total_cents - solde_cents)
     return render(
         request,
         "cantine/panier.html",
         {
             "lignes": lignes,
             "total_euros": round(total_cents / 100, 2),
-            "solde_euros": profil.solde_euros,
-            "solde_suffisant": bool(lignes) and solde_cents >= total_cents,
-            "manque_euros": round(manque_cents / 100, 2),
         },
     )
 
@@ -274,15 +269,13 @@ def panier_vider(request):
 @login_required
 @require_POST
 def panier_valider(request):
-    """Valide le panier : débit du solde + création des réservations confirmées.
+    """Bascule du panier vers le simulateur de paiement.
 
-    Le débit et la création des réservations se font dans une transaction
-    atomique, avec un verrou en écriture sur le ProfilParent pour éviter
-    tout race entre deux validations simultanées ou entre une validation
-    et la validation d'un paiement par la comptabilité.
-
-    Si le solde est insuffisant, le panier n'est pas consommé et le
-    parent est redirigé vers le formulaire de déclaration de virement.
+    Le débit de solde a disparu : le parent règle désormais le panier
+    directement via `/paiement/simulateur/`. Cette vue conserve un
+    endpoint POST pour rester compatible avec l'ancien bouton
+    « Valider » du panier — elle vérifie juste que le panier est
+    encore valide, puis redirige vers l'écran de paiement.
     """
     profil = request.user.profil_parent
     lignes, perdues = panier_session.lignes_hydratees(request.session, profil)
@@ -291,7 +284,7 @@ def panier_valider(request):
         messages.warning(
             request,
             f"{len(perdues)} article(s) n'étaient plus disponibles et ont "
-            "été retirés du panier. Vérifiez le contenu avant de valider.",
+            "été retirés du panier. Vérifiez le contenu avant de payer.",
         )
         return redirect("cantine:panier_afficher")
 
@@ -299,46 +292,12 @@ def panier_valider(request):
         messages.warning(request, "Votre panier est vide.")
         return redirect("cantine:panier_afficher")
 
-    total_cents = sum(ligne["prix_cents"] for ligne in lignes)
-
-    with transaction.atomic():
-        profil_verrouille = ProfilParent.objects.select_for_update().get(
-            pk=profil.pk
-        )
-        if profil_verrouille.solde_cents < total_cents:
-            manque = (total_cents - profil_verrouille.solde_cents) / 100
-            messages.error(
-                request,
-                f"Solde insuffisant : il manque {manque:.2f} € pour "
-                f"valider ce panier ({total_cents / 100:.2f} €). "
-                "Déclarez un virement pour créditer votre solde — "
-                "votre panier est conservé.",
-            )
-            return redirect("cantine:declarer_virement")
-
-        for ligne in lignes:
-            Reservation.objects.create(
-                enfant=ligne["enfant"],
-                menu=ligne["menu"],
-                formule=ligne["formule"],
-                statut=Reservation.STATUT_CONFIRMEE,
-            )
-        ProfilParent.objects.filter(pk=profil.pk).update(
-            solde_cents=F("solde_cents") - total_cents,
-        )
-
-    panier_session.vider(request.session)
-    messages.success(
-        request,
-        f"{len(lignes)} réservation(s) confirmée(s), solde débité de "
-        f"{total_cents / 100:.2f} €.",
-    )
-    return redirect("cantine:accueil")
+    return redirect("cantine:paiement_simulateur")
 
 
 @login_required
 def historique(request):
-    """Historique : réservations passées + paiements déclarés/validés."""
+    """Historique : réservations passées du parent."""
     profil = request.user.profil_parent
     aujourd_hui = timezone.now().date()
 
@@ -350,43 +309,13 @@ def historique(request):
         .select_related("enfant", "menu")
         .order_by("-menu__date")
     )
-    paiements = profil.paiements.all().order_by("-date_declaration")
 
     return render(
         request,
         "cantine/historique.html",
         {
             "reservations_passees": reservations_passees,
-            "paiements": paiements,
         },
-    )
-
-
-@login_required
-def declarer_virement(request):
-    """Formulaire de déclaration d'un virement (statut = declare)."""
-    profil = request.user.profil_parent
-
-    if request.method == "POST":
-        form = DeclarationVirementForm(request.POST)
-        if form.is_valid():
-            Paiement.objects.create(
-                parent=profil,
-                montant_cents=form.montant_cents(),
-                reference_virement=form.cleaned_data["reference_virement"],
-            )
-            messages.success(
-                request,
-                "Virement déclaré. La comptabilité le validera dès réception.",
-            )
-            return redirect("cantine:historique")
-    else:
-        form = DeclarationVirementForm()
-
-    return render(
-        request,
-        "cantine/declarer_virement.html",
-        {"form": form},
     )
 
 
@@ -896,109 +825,12 @@ def cuisine_marquer_mangee(request, reservation_id):
 # ---------------------------------------------------------------------
 
 
-# Statuts de paiement autorisés dans le filtre GET de la liste des
-# paiements. Toute autre valeur retombe sur « déclarés » par défaut.
-FILTRES_PAIEMENT = {
-    Paiement.STATUT_DECLARE: "Déclarés",
-    Paiement.STATUT_VALIDE: "Validés",
-    Paiement.STATUT_REJETE: "Rejetés",
-    "tous": "Tous",
-}
-
 # Prix de repas de secours (centimes) si aucun menu n'existe encore en
 # base : sert de référence au badge « solde faible » du suivi enfants.
 PRIX_REPAS_DEFAUT_CENTS = 600
 
 # Fenêtre par défaut (en jours) du suivi croisé repas/paiements.
 SUIVI_PERIODE_JOURS_DEFAUT = 30
-
-
-@comptabilite_required
-def comptabilite_paiements(request):
-    """Liste des paiements avec filtre par statut (déclarés par défaut).
-
-    Les paiements au statut « déclaré » exposent les actions Valider /
-    Rejeter (POST). Le filtre se pilote via `?statut=` (declare, valide,
-    rejete ou tous).
-    """
-    statut = request.GET.get("statut", Paiement.STATUT_DECLARE)
-    if statut not in FILTRES_PAIEMENT:
-        statut = Paiement.STATUT_DECLARE
-
-    paiements = Paiement.objects.select_related(
-        "parent", "parent__utilisateur"
-    )
-    if statut != "tous":
-        paiements = paiements.filter(statut=statut)
-    paiements = paiements.order_by("-date_declaration")
-
-    return render(
-        request,
-        "cantine/comptabilite_paiements.html",
-        {
-            "paiements": paiements,
-            "statut_actif": statut,
-            "filtres": FILTRES_PAIEMENT,
-        },
-    )
-
-
-@comptabilite_required
-@require_POST
-def comptabilite_paiement_valider(request, pk):
-    """Valide un paiement déclaré (crédite le solde) puis revient à la liste."""
-    paiement = get_object_or_404(
-        Paiement.objects.select_related("parent", "parent__utilisateur"),
-        pk=pk,
-    )
-    change = paiement.valider()
-    if change:
-        messages.success(
-            request,
-            f"Paiement de {paiement.parent} "
-            f"({paiement.montant_euros:.2f} €) validé : solde crédité.",
-        )
-    else:
-        messages.info(
-            request,
-            f"Le paiement de {paiement.parent} était déjà validé : "
-            "aucun crédit supplémentaire.",
-        )
-    return redirect(_retour_paiements(request))
-
-
-@comptabilite_required
-@require_POST
-def comptabilite_paiement_rejeter(request, pk):
-    """Rejette un paiement déclaré (sans créditer) puis revient à la liste."""
-    paiement = get_object_or_404(
-        Paiement.objects.select_related("parent", "parent__utilisateur"),
-        pk=pk,
-    )
-    commentaire = (request.POST.get("commentaire_compta") or "").strip()
-    change = paiement.rejeter(commentaire=commentaire)
-    if change:
-        messages.success(
-            request,
-            f"Paiement de {paiement.parent} "
-            f"({paiement.montant_euros:.2f} €) rejeté.",
-        )
-    else:
-        messages.warning(
-            request,
-            f"Le paiement de {paiement.parent} ne peut plus être rejeté "
-            f"(statut actuel : « {paiement.get_statut_display()} »).",
-        )
-    return redirect(_retour_paiements(request))
-
-
-def _retour_paiements(request):
-    """URL de retour vers la liste des paiements en conservant le filtre."""
-    statut = request.POST.get("statut")
-    url = reverse("cantine:comptabilite_paiements")
-    if statut in FILTRES_PAIEMENT:
-        url = f"{url}?statut={statut}"
-    return url
 
 
 @comptabilite_required
