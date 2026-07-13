@@ -57,4 +57,24 @@ urlpatterns = [
         views.cuisine_marquer_mangee,
         name="cuisine_marquer_mangee",
     ),
+    path(
+        "cuisine/menus/",
+        views.cuisine_menus,
+        name="cuisine_menus",
+    ),
+    path(
+        "cuisine/menus/creer/",
+        views.cuisine_menu_creer,
+        name="cuisine_menu_creer",
+    ),
+    path(
+        "cuisine/menus/<int:pk>/modifier/",
+        views.cuisine_menu_modifier,
+        name="cuisine_menu_modifier",
+    ),
+    path(
+        "cuisine/menus/<int:pk>/supprimer/",
+        views.cuisine_menu_supprimer,
+        name="cuisine_menu_supprimer",
+    ),
 ]

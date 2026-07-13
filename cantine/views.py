@@ -18,7 +18,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .decorators import cuisine_required
-from .forms import DeclarationVirementForm, InscriptionParentForm
+from .forms import DeclarationVirementForm, InscriptionParentForm, MenuForm
 from .models import Enfant, Menu, Paiement, Reservation
 
 
@@ -357,6 +357,107 @@ def cuisine_aujourdhui(request):
     return redirect(
         "cantine:cuisine_jour", date=aujourd_hui.isoformat()
     )
+
+
+@cuisine_required
+def cuisine_menus(request):
+    """Liste les menus à venir pour la cuisinière (édition/suppression)."""
+    aujourd_hui = timezone.now().date()
+    menus = (
+        Menu.objects.filter(date__gte=aujourd_hui)
+        .annotate(nb_reservations=Count("reservations"))
+        .order_by("date")
+    )
+    return render(
+        request,
+        "cantine/cuisine_menus.html",
+        {"menus": menus, "aujourd_hui": aujourd_hui},
+    )
+
+
+@cuisine_required
+def cuisine_menu_creer(request):
+    """Formulaire de création d'un menu.
+
+    Accepte un paramètre GET `date` (AAAA-MM-JJ) pour pré-remplir la
+    date depuis le calendrier cuisine.
+    """
+    initial = {}
+    date_param = request.GET.get("date")
+    if date_param:
+        try:
+            initial["date"] = datetime.strptime(date_param, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+
+    if request.method == "POST":
+        form = MenuForm(request.POST)
+        if form.is_valid():
+            menu = form.save()
+            messages.success(
+                request,
+                f"Menu du {menu.date:%d/%m/%Y} créé : {menu.plat_principal}.",
+            )
+            return redirect("cantine:cuisine_menus")
+    else:
+        form = MenuForm(initial=initial)
+
+    return render(
+        request,
+        "cantine/cuisine_menu_form.html",
+        {"form": form, "menu": None},
+    )
+
+
+@cuisine_required
+def cuisine_menu_modifier(request, pk):
+    """Formulaire d'édition d'un menu existant."""
+    menu = get_object_or_404(Menu, pk=pk)
+
+    if request.method == "POST":
+        form = MenuForm(request.POST, instance=menu)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f"Menu du {menu.date:%d/%m/%Y} mis à jour.",
+            )
+            return redirect("cantine:cuisine_menus")
+    else:
+        form = MenuForm(instance=menu)
+
+    return render(
+        request,
+        "cantine/cuisine_menu_form.html",
+        {"form": form, "menu": menu},
+    )
+
+
+@cuisine_required
+@require_POST
+def cuisine_menu_supprimer(request, pk):
+    """Supprime un menu s'il n'a aucune réservation liée."""
+    menu = get_object_or_404(Menu, pk=pk)
+    nb_reservations = menu.reservations.count()
+    if nb_reservations:
+        messages.error(
+            request,
+            f"Impossible de supprimer le menu du {menu.date:%d/%m/%Y} : "
+            f"{nb_reservations} réservation"
+            f"{'s' if nb_reservations > 1 else ''} y "
+            f"{'sont' if nb_reservations > 1 else 'est'} rattachée"
+            f"{'s' if nb_reservations > 1 else ''}. "
+            "Annulez d'abord ces réservations dans l'admin.",
+        )
+        return redirect("cantine:cuisine_menus")
+
+    date_menu = menu.date
+    menu.delete()
+    messages.success(
+        request,
+        f"Menu du {date_menu:%d/%m/%Y} supprimé.",
+    )
+    return redirect("cantine:cuisine_menus")
 
 
 @cuisine_required

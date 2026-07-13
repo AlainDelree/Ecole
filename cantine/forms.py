@@ -4,9 +4,13 @@ On reste sur des ModelForm / Form Django tout simples : crispy-forms
 s'occupe du rendu Bootstrap dans les templates.
 """
 
+from decimal import Decimal
+
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
+
+from .models import Menu
 
 
 class InscriptionParentForm(UserCreationForm):
@@ -73,3 +77,57 @@ class DeclarationVirementForm(forms.Form):
     def montant_cents(self) -> int:
         """Convertit le montant saisi en centimes (int)."""
         return int(round(self.cleaned_data["montant_euros"] * 100))
+
+
+class MenuForm(forms.ModelForm):
+    """ModelForm de gestion des menus par la cuisinière.
+
+    Le prix est saisi en euros par la cuisinière, mais le modèle
+    stocke `prix_cents` en centimes (convention monétaire du projet).
+    On expose donc un champ `prix_euros` en lieu et place du champ
+    natif, puis on convertit dans `save()`. Le champ `date` étant
+    `unique` sur `Menu`, ModelForm valide déjà l'unicité et produit
+    une erreur de formulaire propre en cas de doublon (pas un 500).
+    """
+
+    prix_euros = forms.DecimalField(
+        label="Prix (€)",
+        min_value=Decimal("0.01"),
+        decimal_places=2,
+        help_text="Prix du repas en euros (converti en centimes pour le stockage).",
+    )
+
+    class Meta:
+        model = Menu
+        fields = ["date", "plat_principal", "description", "ferme_a"]
+        widgets = {
+            "date": forms.DateInput(attrs={"type": "date"}),
+            "ferme_a": forms.DateTimeInput(
+                attrs={"type": "datetime-local"},
+                format="%Y-%m-%dT%H:%M",
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Pré-remplit prix_euros à partir de prix_cents en édition.
+        if self.instance and self.instance.pk:
+            self.fields["prix_euros"].initial = (
+                Decimal(self.instance.prix_cents) / Decimal(100)
+            )
+        # Le widget datetime-local n'accepte pas les secondes/fuseau ;
+        # il faut aussi reformater la valeur initiale en édition.
+        self.fields["ferme_a"].input_formats = [
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+        ]
+
+    def save(self, commit=True):
+        menu = super().save(commit=False)
+        menu.prix_cents = int(
+            round(self.cleaned_data["prix_euros"] * Decimal(100))
+        )
+        if commit:
+            menu.save()
+        return menu
