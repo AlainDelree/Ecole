@@ -6,11 +6,13 @@ présents (utilise `get_or_create` ou vérifie l'existence sur date).
 
 from datetime import date, datetime, time, timedelta
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from cantine.models import Classe, Enfant, Menu
+
+NOM_GROUPE_CUISINE = "Cuisine"
 
 
 PLATS_DEMO = [
@@ -125,6 +127,22 @@ class Command(BaseCommand):
             if cree:
                 crees += 1
 
+        # --- Groupe et utilisateur de démo « Cuisine » ------------------
+        groupe_cuisine, _ = Group.objects.get_or_create(name=NOM_GROUPE_CUISINE)
+        cuisine_user, cree = User.objects.get_or_create(
+            username="cuisine",
+            defaults={
+                "first_name": "Cuisine",
+                "last_name": "Démo",
+                "email": "",
+            },
+        )
+        if cree:
+            cuisine_user.set_password("cuisine1234")
+            cuisine_user.save()
+            self.stdout.write("  + Utilisateur : cuisine (mdp = cuisine1234)")
+        cuisine_user.groups.add(groupe_cuisine)
+
         self.stdout.write(self.style.SUCCESS(
             f"Données de démo prêtes : {len(classes)} classes, "
             f"{len(parents)} parents, {len(enfants_config)} enfants, "
@@ -133,4 +151,7 @@ class Command(BaseCommand):
         self.stdout.write(
             "Comptes parents : parent.dupont@example.be / parent.lemoine@example.be "
             "— mot de passe : demo1234"
+        )
+        self.stdout.write(
+            "Compte cuisine : cuisine — mot de passe : cuisine1234"
         )

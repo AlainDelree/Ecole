@@ -49,13 +49,17 @@ python manage.py runserver
 
 ## Comptes de démo (après `peupler_demo`)
 
-| E-mail                          | Mot de passe |
-|---------------------------------|--------------|
-| parent.dupont@example.be        | demo1234     |
-| parent.lemoine@example.be       | demo1234     |
+| Identifiant                     | Mot de passe | Rôle           |
+|---------------------------------|--------------|----------------|
+| parent.dupont@example.be        | demo1234     | Parent         |
+| parent.lemoine@example.be       | demo1234     | Parent         |
+| cuisine                         | cuisine1234  | Groupe Cuisine |
 
 Le superuser Django (créé avec `createsuperuser`) sert de compte compta
 pour valider les virements dans l'admin.
+
+Le compte `cuisine` est membre du groupe Django `Cuisine` et accède aux
+vues cuisinière (`/cuisine/calendrier/`, `/cuisine/aujourdhui/`).
 
 ## Structure principale
 
