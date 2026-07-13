@@ -47,7 +47,11 @@ python manage.py runserver
 - Interface parents : <http://localhost:8000/>
 - Admin Django (comptabilité, cuisine, etc.) : <http://localhost:8000/admin/>
 
-## Comptes de démo (après `peupler_demo`)
+## Comptes de démonstration
+
+Les comptes ci-dessous sont créés par `python manage.py peupler_demo`
+(sauf le superutilisateur, voir plus bas). Ils permettent de tester
+chaque parcours sans créer de compte à la main.
 
 | Identifiant                     | Mot de passe | Rôle           |
 |---------------------------------|--------------|----------------|
@@ -55,11 +59,19 @@ python manage.py runserver
 | parent.lemoine@example.be       | demo1234     | Parent         |
 | cuisine                         | cuisine1234  | Groupe Cuisine |
 
-Le superuser Django (créé avec `createsuperuser`) sert de compte compta
-pour valider les virements dans l'admin.
+**Superutilisateur (compta)** — *non* créé par `peupler_demo` : il se
+crée manuellement à l'installation avec `python manage.py createsuperuser`.
+Il sert de compte comptabilité pour valider les virements dans l'admin
+Django (<http://localhost:8000/admin/>).
 
-Le compte `cuisine` est membre du groupe Django `Cuisine` et accède aux
-vues cuisinière (`/cuisine/calendrier/`, `/cuisine/aujourdhui/`).
+**Parent** — pour tester le parcours parent (réservation, déclaration de
+virement, historique), connectez-vous avec `parent.dupont@example.be`
+(mot de passe `demo1234`) sur le site public (<http://localhost:8000/>).
+Ce parent a déjà des enfants rattachés dans les données de démo.
+
+**Cuisine** — le compte `cuisine` (mot de passe `cuisine1234`) est membre
+du groupe Django `Cuisine` et accède aux vues cuisinière
+(`/cuisine/calendrier/`, `/cuisine/aujourdhui/`) et à la gestion des menus.
 
 ## Structure principale
 
